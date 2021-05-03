@@ -1,0 +1,54 @@
+<div class="dialog">
+    <h2 mat-dialog-title class="mat-dialog-title pepperi-border-bottom">
+        <span *ngIf="title?.length">{{ title }}</span>
+    </h2>
+    <div mat-dialog-content class="mat-dialog-content">
+        <div class="grid-container"> 
+            <div class="user">
+                <pep-textbox [label]="'User' | translate" [value]="" [disabled]="mode == 'Update'"
+                [type]="'text'" [required]="true" (valueChange)="onValueChanged('UserUUID', $event)"></pep-textbox>
+            </div>
+            <div class="warehouse">
+                <pep-textbox [label]="'Warehouse' | translate" [value]="'some user'" [disabled]="mode == 'Update'"
+                [type]="'text'" [required]="true" (valueChange)="onValueChanged('UserUUID', $event)"></pep-textbox>
+            </div>
+            <div class="item">
+                <pep-textbox [label]="'Item' | translate" [value]="''" [disabled]="mode == 'Update'"
+                [type]="'text'" [required]="true" (valueChange)="onValueChanged('ItemExternalID', $event)"></pep-textbox>
+            </div>
+
+            <div class="allocation">
+                <pep-textbox [label]="'Allocation' | translate" [value]="''"
+                [type]="'int'" [required]="true" (valueChange)="onValueChanged('MaxAllocation', $event)"></pep-textbox>
+            </div>
+            <div class="starts">
+                <pep-date [label]="'Starts' | translate" [value]="''"
+                [type]="'text'" [required]="true" (valueChange)="onValueChanged('ItemExternalID', $event)"></pep-date>
+            </div>
+            <div class="ends">
+                <pep-date [label]="'Starts' | translate" [value]="''"
+                [type]="'text'" [required]="true" (valueChange)="onValueChanged('ItemExternalID', $event)"></pep-date>
+            </div>
+        </div>
+    </div>
+    <div mat-dialog-actions class="pepperi-border-top mat-dialog-actions split-actions"
+        style="justify-content: flex-end;">
+        <div class="spacing-element-negative">
+            <button class="spacing-element pepperi-button md weak mat-button" mat-button [mat-dialog-close]>
+                <span class="mat-button-wrapper">
+                    {{ 'Cancel' | translate }}
+                </span>
+                <div class="mat-button-ripple mat-ripple" matripple></div>
+                <div class="mat-button-focus-overlay"></div>
+            </button>
+            <button class="spacing-element pepperi-button md strong mat-button" mat-button
+                [mat-dialog-close]="dialogData">
+                <span class="mat-button-wrapper">
+                    {{ (mode == 'Add' ? 'Add' : 'Update') | translate }}
+                </span>
+                <div class="mat-button-ripple mat-ripple" matripple></div>
+                <div class="mat-button-focus-overlay"></div>
+            </button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,26 @@
+.grid-container {
+    display: grid;
+    overflow-y: scroll;
+    gap: 1px 10px;
+    border: 5px;
+    padding: 20px;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "user item" "allocation warehouse" "starts ends";
+    
+    .user { grid-area: user; }
+  
+    .item { grid-area: item; }
+
+    .warehouse { grid-area: warehouse; }
+
+
+    .allocation { grid-area: allocation; }
+
+    .starts {
+        grid-area: starts;
+    }
+    
+    .ends {
+        grid-area: ends;
+    }
+}

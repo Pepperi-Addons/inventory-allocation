@@ -1,0 +1,29 @@
+<div class="addon-page-container">
+    <pep-top-bar [title]="'Inventory Allocation' | translate">
+       
+   </pep-top-bar> 
+
+<div class="main-content">
+   <div class="content">
+        <mat-tab-group #tabGroup animationDuration="0ms" class="fixed-header">
+            <mat-tab label="{{ 'User Allocations' | translate}}">
+                <ng-template matTabContent>
+                    <generic-list [dataSource]="userDatasource"></generic-list>
+                </ng-template>
+           </mat-tab>
+           
+            <mat-tab label="{{ 'Warehouses' | translate}}">
+                <ng-template matTabContent>
+                    <generic-list [dataSource]="warehouseDatasource"></generic-list>
+                </ng-template>
+            </mat-tab>
+
+            <mat-tab label="{{ 'Order Allocations' | translate}}">
+                <ng-template matTabContent>
+                    <generic-list [dataSource]="orderAllocationsDatasource"></generic-list>
+                </ng-template>
+            </mat-tab>
+       </mat-tab-group>
+   </div>
+</div>
+</div>

@@ -12,6 +12,7 @@ import { GenericListDataSource } from '../generic-list/generic-list.component';
 export class WarehouseComponent implements OnInit {
 
   warehouseID: string = ''
+  warehouse;
 
   constructor(
     private addonService: PepAddonService,
@@ -33,19 +34,33 @@ export class WarehouseComponent implements OnInit {
     })
   }
 
-  dataSource: GenericListDataSource = {
-    getList: () => {
-      return this.addonService.getAddonApiCall(
+  async getWarehouse() {
+    if (!this.warehouse) {
+      this.warehouse = this.addonService.getAddonApiCall(
         this.pluginService.pluginUUID, 
         'inventory_allocation', 
         `warehouses?where=WarehouseID='${this.warehouseID}'`
-        ).toPromise().then(arr => {
+        ).toPromise().then(obj => obj[0]);
+    }
+    return this.warehouse;
+  }
+
+  dataSource: GenericListDataSource = {
+    getList: (state) => {
+      return this.getWarehouse().then(warehouse => {
           const res = [];
 
-          for (const item in arr[0].Inventory) {
+          let keys = Object.keys(warehouse.Inventory);
+          
+          if (state.searchString) {
+            keys = keys.filter(key => key.toLowerCase().includes(state.searchString.toLowerCase()))
+          }
+
+          for (const item of keys) {
             res.push({
               Item: item,
-              Quantity: arr[0].Inventory[item].toString()
+              Quantity: warehouse.Inventory[item].toString(),
+              UserAllocations: (warehouse.UserAllocations[item] || 0).toString()
             })
           }
 
@@ -78,6 +93,13 @@ export class WarehouseComponent implements OnInit {
               Title: 'Quantity',
               Mandatory: false,
               ReadOnly: true
+            },
+            {
+              FieldID: 'UserAllocations',
+              Type: 'TextBox',
+              Title: 'Allocated to Users',
+              Mandatory: false,
+              ReadOnly: true
             }
           ],
           Columns: [
@@ -92,6 +114,5 @@ export class WarehouseComponent implements OnInit {
           MinimumColumnWidth: 0
         }
     }
-}
-
+  }
 }

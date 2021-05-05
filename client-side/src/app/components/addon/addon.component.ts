@@ -13,7 +13,7 @@ import { TranslateService } from "@ngx-translate/core";
 import { Router, ActivatedRoute } from "@angular/router";
 import { PepAddonService, PepLayoutService, PepScreenSizeType } from '@pepperi-addons/ngx-lib';
 import { AddonService } from './addon.service';
-import { GenericListDataSource } from "../generic-list/generic-list.component";
+import { GenericListComponent, GenericListDataSource } from "../generic-list/generic-list.component";
 import { UserAllocationDialogComponent } from "../user-allocation-dialog/user-allocation-dialog.component";
 
 
@@ -24,7 +24,12 @@ import { UserAllocationDialogComponent } from "../user-allocation-dialog/user-al
   providers: [AddonService]
 })
 export class AddonComponent implements OnInit {
+    @ViewChild(GenericListComponent) 
+    userAllocationList: GenericListComponent;
+
     screenSize: PepScreenSizeType;
+
+    searchFields = ['UserID', 'ItemExternalID', 'WarehouseID'];
 
     constructor(
         public pluginService: AddonService,
@@ -159,7 +164,7 @@ export class AddonComponent implements OnInit {
                 ReadOnly: true
               },
             {
-                FieldID: 'UserUUID',
+                FieldID: 'UserID',
                 Type: 'TextBox',
                 Title: 'User',
                 Mandatory: false,
@@ -191,7 +196,7 @@ export class AddonComponent implements OnInit {
 }
 
   userDatasource: GenericListDataSource = {
-    getList: () => {
+    getList: (state) => {
       return this.addonService.getAddonApiCall(
           this.pluginService.pluginUUID, 
           'inventory_allocation', 
@@ -199,10 +204,18 @@ export class AddonComponent implements OnInit {
           .toPromise()
           .then(res => res.map(obj => {
               obj.MaxAllocation = obj.MaxAllocation.toString();
-              obj.RemainingAllocation = obj.RemainingAllocation.toString();
               obj.UsedAllocation = obj.UsedAllocation.toString();
               return obj;
-          }));
+          }))
+          .then(res => res.filter(
+            obj => {
+              let res = true;
+              if (state.searchString) {
+                res = this.searchFields.find(field => obj[field].toLowerCase().includes(state.searchString.toLowerCase())) != undefined;
+              }
+              return res;
+            }
+          ));
     },
     getActions: async (obj) => {
         if (obj) {
@@ -210,7 +223,7 @@ export class AddonComponent implements OnInit {
                 {
                     title: this.translate.instant('Edit'),
                     handler: async (obj) => {
-                        this.pluginService.openDialog('Hello', UserAllocationDialogComponent, null, null, null);
+                        this.showUserAllocationDialog(obj);
                     }
                 }
             ]
@@ -228,7 +241,7 @@ export class AddonComponent implements OnInit {
           Title: '',
           Fields: [
             {
-              FieldID: 'UserUUID',
+              FieldID: 'UserID',
               Type: 'TextBox',
               Title: 'User',
               Mandatory: false,
@@ -277,16 +290,9 @@ export class AddonComponent implements OnInit {
                 ReadOnly: true
             },
             {
-                FieldID: 'RemainingAllocation',
-                Type: 'TextBox',
-                Title: 'Remaining',
-                Mandatory: false,
-                ReadOnly: true
-            },
-            {
                 FieldID: 'UsedAllocation',
                 Type: 'TextBox',
-                Title: 'Remaining',
+                Title: 'Used',
                 Mandatory: false,
                 ReadOnly: true
             },
@@ -316,14 +322,28 @@ export class AddonComponent implements OnInit {
             {
                 Width: 25
             },
-            {
-                Width: 25
-            },
           ],
           FrozenColumnsCount: 0,
           MinimumColumnWidth: 0
         }
     }
-}
+  }
 
+  add() {
+    this.showUserAllocationDialog(undefined)
+  }
+
+  showUserAllocationDialog(userAllocation: any) {
+    this.pluginService.openDialog(this.translate.instant('Add a User Allocation'), UserAllocationDialogComponent, null, {
+      userAllocation: userAllocation
+    }, (userAllocation) => {
+      if (userAllocation) {
+        this.addonService.postAddonApiCall(
+          this.pluginService.pluginUUID,
+          'inventory_allocation',
+          'user_allocations', 
+          userAllocation).toPromise().then(() => this.userAllocationList.reload())
+      }
+    })
+  }
 }

@@ -40,7 +40,7 @@ import {
 import { DataView, GridDataViewField, DataViewFieldType, DataViewFieldTypes } from '@pepperi-addons/papi-sdk/dist/entities/data-view';
 
 export interface GenericListDataSource {
-    getList(): Promise<any[]>;
+    getList(state: { searchString: string }): Promise<any[]>;
     getDataView(): Promise<DataView>;
     getActions(obj: any): Promise<{
         title: string;
@@ -60,8 +60,19 @@ export class GenericListComponent implements OnInit, AfterViewInit {
   dataSource: GenericListDataSource;
   dataObjects: any[] = []
 
+  searchString: string = '';
+
   @Input()
   title: string = ''
+
+  @Input()
+  inline: boolean = false;
+
+  @Input()
+  showSearch: boolean = false;
+
+  @Input()
+  allowSelection: boolean = true;
 
   menuHandlers: { [key: string]: (obj: any) => Promise<void> }
   menuActions: Array<PepMenuItem>;
@@ -83,11 +94,13 @@ export class GenericListComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-      this.loadlist();
+      this.reload();
   }
 
   private loadMenuItems(): void {
+    if (this.allowSelection) {
       this.getMenuActions().then(x => this.menuActions = x);
+    }
   }
 
   async getMenuActions(): Promise<PepMenuItem[]> {
@@ -117,13 +130,19 @@ export class GenericListComponent implements OnInit, AfterViewInit {
     this.menuHandlers[action.source.key](this.getObject(uuid));
   }
 
-  async loadlist() {
+  onSearchChanged($event) {
+    this.searchString = $event.value
+    this.reload();
+  }
+
+  async reload() {
       if (this.customList && this.dataSource) {
-          this.dataObjects = await this.dataSource.getList();
+          this.dataObjects = await this.dataSource.getList({
+            searchString: this.searchString
+          });
           const dataView = await this.dataSource.getDataView();
           const tableData = this.dataObjects.map(x => this.convertToPepRowData(x, dataView));
           const data = this.dataConvertorService.convertListData(tableData);
-          data.Rows[0]
           data.Rows.forEach((obj, i) => {
             this.dataObjects[i].UID = obj.UID;
           })
@@ -137,6 +156,7 @@ export class GenericListComponent implements OnInit, AfterViewInit {
               IsEditable: false
             }
           }), 'table')
+        
           this.loadMenuItems();
       }
   }

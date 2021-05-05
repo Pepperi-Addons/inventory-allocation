@@ -117,12 +117,14 @@ const pepperiComponentsModules = [
     PepIconModule,
     PepMenuModule,
     PepTopBarModule,
-    PepButtonModule
+    PepButtonModule,
+    PepSearchModule
 ];
 
 import { TranslateModule, TranslateLoader, TranslateService } from '@ngx-translate/core';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { MultiTranslateHttpLoader } from 'ngx-translate-multi-http-loader';
+import { PepSearchModule } from '@pepperi-addons/ngx-lib/search';
 
 // export function createTranslateLoader(http: HttpClient) {
 //    return new TranslateHttpLoader(http, '/assets/i18n/', '.json');

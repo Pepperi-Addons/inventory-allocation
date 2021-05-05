@@ -1,6 +1,5 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
-import { ThumbnailsPosition } from 'ng-gallery';
 
 @Component({
   selector: 'addon-user-allocation-dialog',
@@ -10,23 +9,23 @@ import { ThumbnailsPosition } from 'ng-gallery';
 export class UserAllocationDialogComponent implements OnInit {
 
   title: string;
-  dialogData: any;
   mode: 'Add' | 'Update' = 'Add';
   userAllocation = {
-    UserUUID: '',
+    UserID: '',
     ItemExternalID: '',
     WarehouseID: '',
     StartDateTime: new Date().toISOString(),
     EndDateTime: new Date().toISOString(),
-    MaxAllocation: 0
+    MaxAllocation: 0,
+    UsedAllocation: 0
   }
 
   constructor(public dialogRef: MatDialogRef<UserAllocationDialogComponent>, 
     @Inject(MAT_DIALOG_DATA) public incoming: any) {
 
-    debugger;
     if (incoming && incoming.userAllocation) {
       this.userAllocation = incoming.userAllocation;
+      this.mode = 'Update';
     }
   }
 
@@ -34,11 +33,22 @@ export class UserAllocationDialogComponent implements OnInit {
   }
 
   ngOnDestroy(){
-      this.dialogData = null;
   }
 
-  onValueChanged(element, $event) {
-      this.userAllocation[element] = $event.value;
+  getDateValue(str: string) {
+    return new Date(str).toUTCString()
+  }
+
+  onValueChanged(key, value) {
+      this.userAllocation[key] = value;
+  }
+
+  onNumberChange(key, value) {
+    this.userAllocation[key] = Number(value);
+  }
+
+  onDateChange(key, value) {
+    this.userAllocation[key] = new Date(value).toISOString();
   }
 
 }

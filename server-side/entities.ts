@@ -20,7 +20,7 @@ export interface Warehouse extends AddonData {
     /**
      * Holds the inventory allocated to specific users with UserAllocation
      */
-    // UserAllocations: { [key: string]: number }
+    UserAllocations: { [key: string]: number }
 
     /**
      * The time allowed to temp allocation an order in minutes
@@ -40,7 +40,7 @@ export interface OrderAllocation extends AddonData {
     /**
      * The last user that called 
      */
-    UserUUID: string;
+    UserID: string;
 
     WarehouseID: string;
     
@@ -73,11 +73,11 @@ export interface OrderAllocation extends AddonData {
  */
 export interface UserAllocation extends AddonData {
 
-    // Key = WarehouseID + '_' + UserUUID + '_' + ItemExternalID
+    // Key = WarehouseID + '_' + UserID + '_' + ItemExternalID
 
     WarehouseID: string; 
 
-    UserUUID: string;
+    UserID: string;
 
     ItemExternalID: string;
 
@@ -99,12 +99,6 @@ export interface UserAllocation extends AddonData {
     MaxAllocation: number;
 
     /**
-     * Allocation availble now for this user
-     * This will be bigger than 0 only within the allocation period
-     */
-    RemainingAllocation: number;
-
-    /**
      * When a user uses his allocation it is removed from the remaining allocation
      * and added here
      */
@@ -123,4 +117,6 @@ export interface WarehouseLock extends AddonData {
 export const ORDER_ALLOCATION_TABLE_NAME = 'OrderAllocation';
 export const WAREHOUSE_TABLE_NAME = 'Warehouse';
 export const USER_ALLOCATION_TABLE_NAME = 'UserAllocation';
+export const USER_ALLOCATION_UDT_NAME = 'UserAllocation';
+export const WAREHOUSE_INVENTORY_UDT_NAME = 'WarehouseItemInventory';
 export const WAREHOUSE_LOCK_TABLE_SUFFIX = '_Lock';

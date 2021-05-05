@@ -22,7 +22,7 @@ export async function rebase_inventory(client, request: Request) {
  * BodyParams
  *  - WarehouseID: string
  *  - OrderUUID: string
- *  - UserUUID: string
+ *  - UserID: string
  *  - Lines: { ItemExtenalID: string, UnitsQuanitity: number }[]
  * Return
  *  - Success: boolean
@@ -35,11 +35,17 @@ export async function rebase_inventory(client, request: Request) {
  */
 export async function allocate_inventory(client, request: Request) {
     const service = new InventoryAllocationService(client);
+    
+    const items: { [key: string]: number } = {};
+    for (const row of request.body.Lines) {
+        items[row.ItemExternalID] = (items[row.ItemExternalID] || 0) + row.UnitsQuantity;
+    }
+
     return await service.allocateOrderInventory(
         request.body.WarehouseID, 
         request.body.OrderUUID, 
-        request.body.UserUUID, 
-        request.body.Items
+        request.body.UserID, 
+        items
     );
 }
 

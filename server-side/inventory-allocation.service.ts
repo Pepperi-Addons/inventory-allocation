@@ -3,7 +3,6 @@ import { Client } from '@pepperi-addons/debug-server';
 import { OrderAllocation, ORDER_ALLOCATION_TABLE_NAME, UserAllocation, USER_ALLOCATION_TABLE_NAME, Warehouse, WAREHOUSE_TABLE_NAME, WAREHOUSE_LOCK_TABLE_SUFFIX } from './entities';
 import { performance } from 'perf_hooks'
 import { v4 as uuid } from 'uuid'
-import { warehouses } from './inventory_allocation';
 
 const MAXIMUM_LOCK_WAITING_TIME_IN_MS = 25000;
 const LOCK_WAITING_ITERATION_TIME_IN_MS = 150;
@@ -100,7 +99,7 @@ export class InventoryAllocationService {
         }
         finally {
             // remove the lock object
-            await this.unlockWarehouse(warehouseID, key);
+            await this.unlockWarehouse(key, warehouseID);
         }
 
         return key;
@@ -170,7 +169,7 @@ export class InventoryAllocationService {
             const t0 = performance.now();
 
             // get the current warehouse object
-            const warehouse = await adal.table(WAREHOUSE_TABLE_NAME).key(warehouseID).get() as Warehouse;
+            const warehouse = await this.getWarehouse(warehouseID);
 
             // get all the orders
             const orderAllocations = (await adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
@@ -190,6 +189,8 @@ export class InventoryAllocationService {
                 }
             }
 
+            const userTotals: { [key: string]: number } = {}
+
             // get all the user allocations
             const userAllocations = (await adal.table(USER_ALLOCATION_TABLE_NAME).iter({
                 where: `WarehouseID = '${warehouseID}' AND Allocated = true`
@@ -198,12 +199,17 @@ export class InventoryAllocationService {
             // subtract the user allocations
             for (const alloc of userAllocations) {
                 if (alloc.Allocated) { // double check
-                    inventories[alloc.ItemExternalID] -= alloc.RemainingAllocation;
+                    const allowed = Math.max(0, alloc.MaxAllocation - alloc.UsedAllocation);
+                    const possible = inventories[alloc.ItemExternalID] || 0;
+                    
+                    userTotals[alloc.ItemExternalID] = Math.min(allowed, possible);
+                    inventories[alloc.ItemExternalID] = possible - userTotals[alloc.ItemExternalID];
                 }
             }
 
             // update the warehouse
             warehouse.Inventory = inventories;
+            warehouse.UserAllocations = userTotals;
             await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
 
             const t1 = performance.now();
@@ -238,15 +244,12 @@ export class InventoryAllocationService {
      * This can also merge with an existing order allocation.
      * @param warehouseID the warehouse id
      * @param orderUUID the order id
-     * @param userUUID the user id
+     * @param userID the user id
      * @param items the items to allocate for the order
      * @returns 
      */
-    async allocateOrderInventory(warehouseID: string, orderUUID: string, userUUID: string, items: { [key: string]: number }): Promise<{ Success: boolean, AllocationAvailability: { [key: string]: number } }> {
-        const res = {
-            Success: false,
-            AllocationAvailability: {}
-        }
+    async allocateOrderInventory(warehouseID: string, orderUUID: string, userID: string, items: { [key: string]: number }): Promise<{ Success: boolean, AllocationAvailability: { [key: string]: number } }> {
+        let res: any = undefined;
         const adal = this.papiClient.addons.data.uuid(this.addonUUID);
 
         // first lock the warehouse
@@ -256,7 +259,7 @@ export class InventoryAllocationService {
                 Key: orderUUID,
                 OrderUUID: orderUUID,
                 WarehouseID: warehouseID,
-                UserUUID: userUUID,
+                UserID: userID,
                 ItemAllocations: {},
                 TempAllocation: undefined
             };
@@ -267,7 +270,7 @@ export class InventoryAllocationService {
 
                 // users can change
                 // we always use the last one
-                existing.UserUUID = userUUID;
+                existing.UserID = userID;
             }
             catch(err) {
                 // todo: make sure the error is not found the orderUUID
@@ -280,10 +283,10 @@ export class InventoryAllocationService {
             const newAllocations = await this.calculateNewAllocations(existing, items);
 
             // 2. Check if the allocation will succeed aka be a real allocation (not temp)
-            const res = await this.checkAllocationAvailability(warehouse, userUUID, newAllocations);
+            res = await this.checkAllocationAvailability(warehouse, userID, newAllocations);
 
             // 3. Perform the allocation (update warehouse inventory & user allocation)
-            await this.updateInventory(newAllocations, warehouseID, userUUID);
+            await this.updateInventory(newAllocations, warehouseID, userID);
 
             // 4. Update the OrderAllocation object
             if (res.Success) {
@@ -336,23 +339,17 @@ export class InventoryAllocationService {
      * @param warehouse the warehouse object to udpate
      * @param userAllocation the user allocation to update
      */
-    async updateInventory(allocations: {[key: string]: number}, warehouseID: string, userUUID: string) {
+    async updateInventory(allocations: {[key: string]: number}, warehouseID: string, userID: string) {
         const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        const warehouse = await adal.table(WAREHOUSE_TABLE_NAME).key(warehouseID).get();
-        let warehouseInventoryChanged = false;
+        const warehouse = await this.getWarehouse(warehouseID);
 
         // update the inventory
         for (const item in allocations) {
             let quantity = allocations[item];
-            const userAllocation = await this.getUserAllocation(warehouseID, userUUID, item);
+            const userAllocation = await this.getUserAllocation(warehouseID, userID, item);
             if (userAllocation && userAllocation.Allocated) {
 
-                // used gets to total so that the user will not get any more allocation
-                // can't be less than 0
-                userAllocation.UsedAllocation += allocations[item];
-                userAllocation.UsedAllocation = Math.max(0, userAllocation.UsedAllocation); 
-
-                // calculate the amount to subtract from the users Remaining allocation
+                // calculate the amount to subtract from the users allocation
                 let toSubtract = 0;
                 if (quantity < 0) { 
                     // deallocation: upto max - used
@@ -362,30 +359,37 @@ export class InventoryAllocationService {
                     toSubtract = Math.max(quantity, userAllocation.UsedAllocation - userAllocation.MaxAllocation);
                 }
                 else if (quantity > 0) { 
-                    // allocation usage: upto remaining
-                    toSubtract = Math.min(quantity, userAllocation.RemainingAllocation);
+                    // allocation
+                    // upto the amount in the usr allocation
+                    toSubtract = Math.min(quantity, warehouse.UserAllocations[item] || 0);
+
+                    // upto the amount the user has left
+                    toSubtract = Math.min(toSubtract, userAllocation.MaxAllocation - userAllocation.UsedAllocation);
+
+                    // no less that 0 - b/c used can be > than max
+                    toSubtract = Math.max(0, toSubtract);
                 }
                 
-                userAllocation.RemainingAllocation -= toSubtract;
+                warehouse.UserAllocations[item] = (warehouse.UserAllocations[item] || 0) - toSubtract;
                 quantity -= toSubtract;
 
-                if (toSubtract != 0) {
-                    // update the user allocation
-                    await adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
-                }
+                // used gets to total so that the user will not get any more allocation
+                // can't be less than 0
+                userAllocation.UsedAllocation += allocations[item];
+                userAllocation.UsedAllocation = Math.max(0, userAllocation.UsedAllocation); 
+
+                // update the user allocation
+                await adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
             }
 
             if (quantity != 0) {
                 // if there still is quantities to add/subtract
-                warehouseInventoryChanged = true;
                 warehouse.Inventory[item] -= quantity;
             }
         }
 
         // update the warehouse
-        if (warehouseInventoryChanged) {
-            await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
-        }
+        await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
     }
 
     /**
@@ -437,7 +441,7 @@ export class InventoryAllocationService {
                     order.TempAllocation = null;
 
                     // update the inventories
-                    await this.updateInventory(newAllocations, order.WarehouseID, order.UserUUID);
+                    await this.updateInventory(newAllocations, order.WarehouseID, order.UserID);
 
                     // update the order allocaiton
                     await adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(order);
@@ -445,64 +449,69 @@ export class InventoryAllocationService {
             });
         }
 
-        // get all the user allocation
-        let userAllocations = await adal.table(USER_ALLOCATION_TABLE_NAME).iter().toArray() as UserAllocation[];
-
-        // filter out only users that have allocations that need changes
-        // 1. they need allocation and haven't been allocated yet
-        // 2. they have allocation and need to be deallocated
-        // 3. they can get more allocation
-        userAllocations = userAllocations.filter(userAllocation => {
-            const validNow = between(new Date(), new Date(userAllocation.StartDateTime), new Date(userAllocation.EndDateTime));
-            return validNow != userAllocation.Allocated || userAllocation.RemainingAllocation < (userAllocation.MaxAllocation - userAllocation.UsedAllocation);
-        });
-
-        for (const obj of userAllocations) {
-            await this.performInLock(obj.WarehouseID, async () => {
+        for (const obj of warehouses) {  
+            await this.performInLock(obj.Key, async () => {
                 
-                // get the user allocation again in the lock
-                const userAllocation = await this.getUserAllocation(obj.WarehouseID, obj.UserUUID, obj.ItemExternalID);
-                if (!userAllocation) {
-                    throw new Error(`Could not find user allocation for key: ${obj.Key}`)
+                // get the warehouse again under lock
+                const warehouse = await adal.table(WAREHOUSE_TABLE_NAME).key(obj.Key).get() as Warehouse;
+                
+                // get all the user allocation
+                let userAllocations = await adal.table(USER_ALLOCATION_TABLE_NAME).iter({
+                    where: `WarehouseID = '${warehouse.WarehouseID}'`
+                }).toArray() as UserAllocation[];
+                
+                const totalUserAllocation: { [key: string]: number } = {};
+
+                // calculate the total user allocations
+                // and update the userAllocations
+                for (const userAllocation of userAllocations) {
+                    const validNow = between(new Date(), new Date(userAllocation.StartDateTime), new Date(userAllocation.EndDateTime));
+                    const item = userAllocation.ItemExternalID;
+
+                    if (validNow != userAllocation.Allocated) {
+                        userAllocation.Allocated = validNow;
+                        
+                        // reset used
+                        userAllocation.UsedAllocation = 0;
+                        
+                        // update user allocation
+                        await adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
+                    }
+
+                    if (userAllocation.Allocated) {
+                        const userTotal = Math.max(0, userAllocation.MaxAllocation - userAllocation.UsedAllocation);
+                        totalUserAllocation[item] = (totalUserAllocation[item] || 0) + userTotal;
+                    }
                 }
 
-                const warehouse = await adal.table(WAREHOUSE_TABLE_NAME).key(userAllocation.WarehouseID).get() as Warehouse;
-                const validNow = between(new Date(), new Date(userAllocation.StartDateTime), new Date(userAllocation.EndDateTime));
-                const item = userAllocation.ItemExternalID;
+                let warehouseChanged = false;
+                for (const item in warehouse.Inventory) {
+                    let diff = (totalUserAllocation[item] || 0) - (warehouse.UserAllocations[item] || 0);
+                    
+                    // only up to the amount in the inventory
+                    diff = Math.min(diff, warehouse.Inventory[item]);
+                    
+                    if (diff) {
+                        warehouseChanged = true;
 
-                if (validNow && !userAllocation.Allocated) {
-                    // need to allocate
-                    userAllocation.Allocated = true;
-                    userAllocation.UsedAllocation = 0;
-                    userAllocation.RemainingAllocation = Math.min(userAllocation.MaxAllocation, warehouse.Inventory[item] || 0);
+                        // move the diff from the inventory to the users allocation
+                        warehouse.Inventory[item] = warehouse.Inventory[item] - diff;
+                        warehouse.UserAllocations[item] = (warehouse.UserAllocations[item] || 0) + diff;
 
-                    // subtract from the warehouse
-                    warehouse.Inventory[item] -= userAllocation.RemainingAllocation;
-                }
-                else if (!validNow && userAllocation.Allocated) {
-                    // need to deallocate
-                    userAllocation.Allocated = false;
-
-                    // add back to the warehouse
-                    warehouse.Inventory[userAllocation.ItemExternalID] += userAllocation.RemainingAllocation;
-                }
-                else if (userAllocation.Allocated) {
-                    const missingAllocation =  userAllocation.MaxAllocation - userAllocation.RemainingAllocation - userAllocation.UsedAllocation;
-                    if (missingAllocation > 0) {
-                        const allocationToAdd = Math.max(missingAllocation, warehouse.Inventory[item] || 0);
-                        warehouse.Inventory[item] -= allocationToAdd;
-                        userAllocation.RemainingAllocation += allocationToAdd;
-                    }   
+                        if (warehouse.UserAllocations[item] === 0) {
+                            delete warehouse.UserAllocations[item];
+                        }
+                    }
                 }
 
-                // update the user & warehouse
-                await adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
-                await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+                if (warehouseChanged) {
+                    await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+                }
             });
         }
 
         const t1 = performance.now();
-        console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses, ${userAllocations.length} user allocations, ${orderAllocations.length} order allocations`)
+        console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses, ${orderAllocations.length} order allocations`)
     }
 
     async getWarehouse(warehouseID: string): Promise<Warehouse> {
@@ -522,7 +531,8 @@ export class InventoryAllocationService {
                 Key: warehouseID,
                 WarehouseID: warehouseID,
                 TempAllocationTime: ORDER_TEMP_ALLOCATION_TIME_IN_MINUTES, // 1 minute
-                Inventory: {}
+                Inventory: {},
+                UserAllocations: {}
             }
 
             console.log(`Creating warehouse: ${warehouseID} and lock table`);
@@ -543,9 +553,9 @@ export class InventoryAllocationService {
         return await adal.table(WAREHOUSE_TABLE_NAME).iter(options).toArray() as Warehouse[];
     }
 
-    async getUserAllocation(warehouseID: string, userUUID: string, item: string): Promise<UserAllocation | undefined> {
+    async getUserAllocation(warehouseID: string, userID: string, item: string): Promise<UserAllocation | undefined> {
         const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        const key = [warehouseID, userUUID, item].join('_');
+        const key = [warehouseID, userID, item].join('_');
         try {
             return await adal.table(USER_ALLOCATION_TABLE_NAME).key(key).get() as UserAllocation;
         }
@@ -561,7 +571,7 @@ export class InventoryAllocationService {
 
     async upsertUserAllocation(alloc: any) {
         const obj: UserAllocation = alloc;
-        obj.Key = [obj.WarehouseID, obj.UserUUID, obj.ItemExternalID].join('_');
+        obj.Key = [obj.WarehouseID, obj.UserID, obj.ItemExternalID].join('_');
         const adal = this.papiClient.addons.data.uuid(this.addonUUID);
         return adal.table(USER_ALLOCATION_TABLE_NAME).upsert(obj) as Promise<UserAllocation>;
     }
@@ -593,17 +603,16 @@ export class InventoryAllocationService {
         return newAllocations;
     }
 
-    async checkAllocationAvailability(warehouse: Warehouse, userUUID: string, allocations: { [key: string]: number }) {
+    async checkAllocationAvailability(warehouse: Warehouse, userID: string, allocations: { [key: string]: number }) {
         const res: { 
             Success: boolean, 
             AllocationAvailability: { [key: string ]: number } 
         } = {
-            Success: false,
+            Success: true,
             AllocationAvailability: {}
         };
         
         // check if allocation will succeed
-        let allAllocated = true;
         for (const item in allocations) {
             const quantity = allocations[item];
             if (quantity > 0) { // else always succeeds
@@ -612,15 +621,17 @@ export class InventoryAllocationService {
 
                 // if not check if there is a user allocaiton
                 if (available < quantity) {
-                    const userAllocation = await this.getUserAllocation(warehouse.WarehouseID, userUUID, item);
+                    const userAllocation = await this.getUserAllocation(warehouse.WarehouseID, userID, item);
                     if (userAllocation && userAllocation.Allocated) {
-                        available += userAllocation.RemainingAllocation;
+                        const remaining = Math.max(0, userAllocation.MaxAllocation - userAllocation.UsedAllocation);
+                        const totalUserAllocations = warehouse.UserAllocations[item];
+                        available += Math.min(remaining, totalUserAllocations);
                     }
                 }
                 
                 if (available < quantity) {
                     // this means that it will be a temp allocation
-                    allAllocated = false;
+                    res.Success = false;
                     allocations[item] = available;
 
                     // mark this item in the res object

@@ -3,3 +3,5 @@
 var_sk
 node_modules
 /publish/assets
+tests/mochawesome-report
+tests/env.json

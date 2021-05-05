@@ -1,6 +1,6 @@
 {
   "AddonUUID": "6857a041-653a-4be0-9390-4141009b815c",
-  "AddonVersion": "0.0.3",
+  "AddonVersion": "0.0.15",
   "DebugPort": 4400,
   "WebappBaseUrl": "https://app.sandbox.pepperi.com",
   "DefaultEditor": "main",
@@ -12,27 +12,15 @@
     "main"
   ],
   "Assets": [
-    "de.json",
     "en.json",
-    "en.ngx-lib.json",
-    "es.json",
-    "fr.json",
-    "he.json",
-    "hu.json",
-    "it.json",
-    "ja.json",
-    "nl.json",
-    "pl.json",
-    "pt.json",
-    "ru.json",
-    "zh.json"
+    "en.ngx-lib.json"
   ],
   "PublishConfig": {
     "ClientStack": "ng10",
     "Editors": [
       {
         "ParentPackageName": "Inventory",
-        "PackageName": "inventory_allocation",
+        "PackageName": "inventory_allocations",
         "Description": "Inventory Allocation"
       }
     ],

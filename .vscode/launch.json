@@ -32,11 +32,19 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
-            "skipFiles": [
-                "<node_internals>/**"
+            "name": "Mocha All",
+            "cwd": "${workspaceFolder}/tests",
+            "program": "node_modules/ts-mocha/bin/ts-mocha",
+            "args": [
+                "-R",
+                "mochawesome",
+                "--timeout",
+                "10m",
+                "${workspaceFolder}/tests/**/*.spec.ts",
             ],
-            "program": "${workspaceFolder}/server-side/app.local.js"
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "protocol": "inspector"
         }
     ]
 }

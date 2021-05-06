@@ -78,4 +78,19 @@ export class ApiClient {
             Lines: lines
         });
     }
+
+    forceResetAllocations() {
+        return this.addonApi.func('reset_allocations').post({},{});
+    }
+
+    commitAllocations(warehouseID: string, orders: string[]) {
+        return this.addonApi.func('commit_allocations').post({}, {
+            WarehouseID: warehouseID,
+            Orders: orders.map(o => {
+                return {
+                    OrderUUID: o
+                }
+            })
+        })
+    }
 }

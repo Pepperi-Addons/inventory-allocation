@@ -371,6 +371,10 @@ export class InventoryAllocationService {
                 }
                 
                 warehouse.UserAllocations[item] = (warehouse.UserAllocations[item] || 0) - toSubtract;
+                if (warehouse.UserAllocations[item] === 0) {
+                    delete warehouse.UserAllocations[item];
+                }
+
                 quantity -= toSubtract;
 
                 // used gets to total so that the user will not get any more allocation

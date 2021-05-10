@@ -1,151 +1,20 @@
-import { PapiClient, InstalledAddon, User } from '@pepperi-addons/papi-sdk'
 import { Client } from '@pepperi-addons/debug-server';
-import { OrderAllocation, ORDER_ALLOCATION_TABLE_NAME, UserAllocation, USER_ALLOCATION_TABLE_NAME, Warehouse, WAREHOUSE_TABLE_NAME, WAREHOUSE_LOCK_TABLE_SUFFIX } from './entities';
+import { OrderAllocation, ORDER_ALLOCATION_TABLE_NAME, UserAllocation, USER_ALLOCATION_TABLE_NAME, Warehouse, WAREHOUSE_TABLE_NAME, WAREHOUSE_LOCK_TABLE_SUFFIX } from '../entities';
 import { performance } from 'perf_hooks'
-import { v4 as uuid } from 'uuid'
+import { AddonService } from './addon.service';
+import { WarehouseLockService } from './warehouse-lock.service';
+import { between } from '../helpers';
 
-const MAXIMUM_LOCK_WAITING_TIME_IN_MS = 25000;
-const LOCK_WAITING_ITERATION_TIME_IN_MS = 150;
 const ORDER_TEMP_ALLOCATION_TIME_IN_MINUTES = 1;
-
-/**
- * Sleep for ms milliseconds
- * @param ms number of milliseconds to sleep
- * @returns A promise that will be resolved at least after ms milliseconds have passed
- */
-function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => {
-        setTimeout(resolve, ms);
-    })
-}
-/**
- * Check if a date falls between two dates
- * @param date the date to check
- * @param before the date before
- * @param after the date after
- * @returns true if before <= date <= after
- */
-function between(date: Date, before: Date, after: Date) {
-    return date >= before && date <= after;
-}
 
 export class InventoryAllocationService {
 
-    papiClient: PapiClient;
-    addonUUID: string;
+    addonService: AddonService;
+    lockService: WarehouseLockService;
 
     constructor(private client: Client) {
-        this.papiClient = new PapiClient({
-            baseURL: client.BaseURL,
-            token: client.OAuthAccessToken,
-            addonUUID: client.AddonUUID,
-            addonSecretKey: client.AddonSecretKey
-        });
-        this.addonUUID = client.AddonUUID;
-    }
-
-    /**
-     * Waits until the warehouse is locked for update
-     * throws an exception if the warehouse can't be locked
-     * @param warehouseID the warehouse UUID
-     * 
-     * @returns the key to unlock the warehouse
-     */
-    async waitOnLockWarehouse(warehouseID: string): Promise<string> {
-        const key = uuid();
-
-        const table = warehouseID + WAREHOUSE_LOCK_TABLE_SUFFIX;
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID).table(table);
-
-        // create a warehouse lock object
-        await adal.upsert({
-            Key: key
-        });
-
-        try {
-            // wait until you are the first in line
-            // wait a maximum of 30
-            let first = false;
-            let waitingTime = 0;
-
-            while (!first) {
-                const l = await adal.find({
-                    // page_size: 1, doesn't work - returns empty array
-                    order_by: 'CreationDateTime' 
-                });
-
-                if (l.length === 0) {
-                    throw new Error('Error locking the warehouse: The lock table returned an empty array.');
-                }
-
-                if (l[0].Key === key) {
-                    first = true;
-                }
-                else {
-                    
-                    if (waitingTime >= MAXIMUM_LOCK_WAITING_TIME_IN_MS) {
-                        throw new Error(`Timeout (${MAXIMUM_LOCK_WAITING_TIME_IN_MS}ms) waiting for lock with key: ${key}.`)
-                    }
-
-                    // you are not the first -- wait until you are
-                    console.log(`Waiting for the lock to be free. Current lock: ${l[0].Key}`);
-                    sleep(LOCK_WAITING_ITERATION_TIME_IN_MS);
-                    waitingTime += LOCK_WAITING_ITERATION_TIME_IN_MS;
-                }
-            }
-        }
-        catch (err) {
-            throw err;
-        }
-        finally {
-            // remove the lock object
-            await this.unlockWarehouse(key, warehouseID);
-        }
-
-        return key;
-    }
-
-    /**
-     * Unlock the warehouse
-     * @param key 
-     * @param warehouseID 
-     */
-    async unlockWarehouse(key: string, warehouseID: string): Promise<void> {
-        const table = warehouseID + WAREHOUSE_LOCK_TABLE_SUFFIX;
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID).table(table);
-
-        await adal.upsert({
-            Key: key,
-            Hidden: true
-        });
-    }
-
-    /**
-     * Perform a block of code within the warehouse lock
-     * @param warehouseID the warehouse id
-     * @param block the code block to run
-     */
-    async performInLock(warehouseID: string, block: () => Promise<void>): Promise<void> {
-        let key = '';
-        try {
-            const t0 = performance.now();
-            key = await this.waitOnLockWarehouse(warehouseID);
-            const t1 = performance.now();
-            
-            console.log(`Waiting on lock ${key} for warehouse ${warehouseID} took: ${(t1-t0).toFixed(2)}ms`);
-    
-
-            await block();
-        }
-        catch (err) {   
-            // rethow to be handled by addon api
-            throw err;
-        }
-        finally {
-            if (key) {
-                await this.unlockWarehouse(key, warehouseID);
-            }
-        }
+        this.addonService = new AddonService(client);
+        this.lockService = new WarehouseLockService(client);
     }
 
     /**
@@ -157,7 +26,6 @@ export class InventoryAllocationService {
      * @param inventories the item inventories to update/rebase
      */
     async rebaseInventories(warehouseID: string, inventories: { [key: string]: number }) {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
 
         // make sure that the warehouse exists, if not - create it
         await this.createWarehouseIfNeeded(warehouseID);
@@ -165,14 +33,14 @@ export class InventoryAllocationService {
         // use later to update the UDT and for logging purposes
         const originalInventories = JSON.parse(JSON.stringify(inventories));
 
-        await this.performInLock(warehouseID, async () => {
+        await this.lockService.performInLock(warehouseID, async () => {
             const t0 = performance.now();
 
             // get the current warehouse object
             const warehouse = await this.getWarehouse(warehouseID);
 
             // get all the orders
-            const orderAllocations = (await adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
+            const orderAllocations = (await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
                 where: `WarehouseID = '${warehouseID}'` // hopefully an index
             }).toArray()) as OrderAllocation[];
 
@@ -192,7 +60,7 @@ export class InventoryAllocationService {
             const userTotals: { [key: string]: number } = {}
 
             // get all the user allocations
-            const userAllocations = (await adal.table(USER_ALLOCATION_TABLE_NAME).iter({
+            const userAllocations = (await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter({
                 where: `WarehouseID = '${warehouseID}' AND Allocated = true`
             }).toArray()) as UserAllocation[];
 
@@ -202,15 +70,19 @@ export class InventoryAllocationService {
                     const allowed = Math.max(0, alloc.MaxAllocation - alloc.UsedAllocation);
                     const possible = inventories[alloc.ItemExternalID] || 0;
                     
-                    userTotals[alloc.ItemExternalID] = Math.min(allowed, possible);
-                    inventories[alloc.ItemExternalID] = possible - userTotals[alloc.ItemExternalID];
+                    userTotals[alloc.ItemExternalID] = (userTotals[alloc.ItemExternalID] || 0) + Math.min(allowed, possible);
+                    inventories[alloc.ItemExternalID] = (inventories[alloc.ItemExternalID] || 0) - userTotals[alloc.ItemExternalID];
+
+                    if (userTotals[alloc.ItemExternalID] === 0) {
+                        delete userTotals[alloc.ItemExternalID];
+                    }
                 }
             }
 
             // update the warehouse
             warehouse.Inventory = inventories;
             warehouse.UserAllocations = userTotals;
-            await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+            await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
 
             const t1 = performance.now();
             console.log(`rebase inventories took ${(t1-t0).toFixed(2)}ms with ${orderAllocations.length} order allocations and ${userAllocations.length} user allocations`)
@@ -225,12 +97,10 @@ export class InventoryAllocationService {
      * @param orders an array of orders to commit
      */
     async commitAllocations(warehouseID: string, orders: { OrderUUID: string }[]) {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        
-        await this.performInLock(warehouseID, async () => {
+        await this.lockService.performInLock(warehouseID, async () => {
             // need to optimize - bulk upsert
             for (const order of orders) {
-                await adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
+                await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
                     Key: order.OrderUUID,
                     Hidden: true
                 });
@@ -250,10 +120,9 @@ export class InventoryAllocationService {
      */
     async allocateOrderInventory(warehouseID: string, orderUUID: string, userID: string, items: { [key: string]: number }): Promise<{ Success: boolean, AllocationAvailability: { [key: string]: number } }> {
         let res: any = undefined;
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
 
         // first lock the warehouse
-        await this.performInLock(warehouseID, async () => {
+        await this.lockService.performInLock(warehouseID, async () => {
 
             let existing: OrderAllocation = {
                 Key: orderUUID,
@@ -266,7 +135,7 @@ export class InventoryAllocationService {
             
             // check if there already is an order
             try {
-                existing = await adal.table(ORDER_ALLOCATION_TABLE_NAME).key(orderUUID).get() as OrderAllocation;
+                existing = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(orderUUID).get() as OrderAllocation;
 
                 // users can change
                 // we always use the last one
@@ -326,7 +195,7 @@ export class InventoryAllocationService {
             }
 
             // update the order allocation
-            await adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(existing);
+            await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(existing);
         });
 
         return res;
@@ -340,7 +209,6 @@ export class InventoryAllocationService {
      * @param userAllocation the user allocation to update
      */
     async updateInventory(allocations: {[key: string]: number}, warehouseID: string, userID: string) {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
         const warehouse = await this.getWarehouse(warehouseID);
 
         // update the inventory
@@ -383,7 +251,7 @@ export class InventoryAllocationService {
                 userAllocation.UsedAllocation = Math.max(0, userAllocation.UsedAllocation); 
 
                 // update the user allocation
-                await adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
+                await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
             }
 
             if (quantity != 0) {
@@ -393,7 +261,7 @@ export class InventoryAllocationService {
         }
 
         // update the warehouse
-        await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+        await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
     }
 
     /**
@@ -403,36 +271,21 @@ export class InventoryAllocationService {
     async checkAllocations() {
         const t0 = performance.now();
 
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-
         // get all warehouses
-        const warehouses = await adal.table(WAREHOUSE_TABLE_NAME).iter({ fields: ['Key'] }).toArray();
+        const warehouses = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).iter({ fields: ['Key'] }).toArray();
         
-        // make sure none of the locks are stuck
-        for (const warehouse of warehouses) {
-            const locks = await adal.table(warehouse.Key + WAREHOUSE_LOCK_TABLE_SUFFIX).iter({
-            }).toArray();
-            for (const lock of locks) {
-                if (new Date(lock.CreationDateTime!) < new Date(new Date().getTime() - 60*1000)) {
-                    console.log(`Removing lock with key: ${lock.Key}. Created: ${lock.CreationDateTime}`);
-                    await adal.table(warehouse.Key + WAREHOUSE_LOCK_TABLE_SUFFIX).upsert({
-                        Key: lock.Key,
-                        Hidden: true
-                    })
-                }
-            }
-        }
+        await Promise.all(warehouses.map(warehouse => this.lockService.checkForStaleLocks(warehouse.Key)));
 
         // get all the order allocation
-        let orderAllocations = await adal.table(ORDER_ALLOCATION_TABLE_NAME).iter().toArray() as OrderAllocation[];
+        let orderAllocations = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter().toArray() as OrderAllocation[];
 
         // only order allocations with temp allocations that have expired
         orderAllocations = orderAllocations.filter(order => order.TempAllocation && new Date(order.TempAllocation.Expires) < new Date());
 
         for (const obj of orderAllocations) {
-            await this.performInLock(obj.WarehouseID, async () => {
+            await this.lockService.performInLock(obj.WarehouseID, async () => {
                 // need to retrieve the order again b/c it might have changed b/c we were not in a lock
-                const order = await adal.table(ORDER_ALLOCATION_TABLE_NAME).key(obj.Key).get() as OrderAllocation;
+                const order = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(obj.Key).get() as OrderAllocation;
 
                 // make sure that it is still expired
                 if (order.TempAllocation && new Date(order.TempAllocation.Expires) < new Date()) {
@@ -448,19 +301,19 @@ export class InventoryAllocationService {
                     await this.updateInventory(newAllocations, order.WarehouseID, order.UserID);
 
                     // update the order allocaiton
-                    await adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(order);
+                    await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(order);
                 }
             });
         }
 
-        for (const obj of warehouses) {  
-            await this.performInLock(obj.Key, async () => {
+        await Promise.all(warehouses.map(async obj => {
+            await this.lockService.performInLock(obj.Key, async () => {
                 
                 // get the warehouse again under lock
-                const warehouse = await adal.table(WAREHOUSE_TABLE_NAME).key(obj.Key).get() as Warehouse;
+                const warehouse = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).key(obj.Key).get() as Warehouse;
                 
                 // get all the user allocation
-                let userAllocations = await adal.table(USER_ALLOCATION_TABLE_NAME).iter({
+                let userAllocations = await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter({
                     where: `WarehouseID = '${warehouse.WarehouseID}'`
                 }).toArray() as UserAllocation[];
                 
@@ -479,7 +332,7 @@ export class InventoryAllocationService {
                         userAllocation.UsedAllocation = 0;
                         
                         // update user allocation
-                        await adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
+                        await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).upsert(userAllocation);
                     }
 
                     if (userAllocation.Allocated) {
@@ -509,26 +362,24 @@ export class InventoryAllocationService {
                 }
 
                 if (warehouseChanged) {
-                    await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+                    await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
                 }
             });
-        }
+        }))
 
         const t1 = performance.now();
         console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses, ${orderAllocations.length} order allocations`)
     }
 
     async getWarehouse(warehouseID: string): Promise<Warehouse> {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        return await adal.table(WAREHOUSE_TABLE_NAME).key(warehouseID).get() as Warehouse;
+        return await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).key(warehouseID).get() as Warehouse;
     } 
 
     async createWarehouseIfNeeded(warehouseID: string) {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
         // make sure the warehouse exists
         // if it doesn't create it and create a lock table for it
         try {
-            await adal.table(WAREHOUSE_TABLE_NAME).key(warehouseID).get();
+            await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).key(warehouseID).get();
         }
         catch(err) {
             const warehouse: Warehouse = {
@@ -541,11 +392,11 @@ export class InventoryAllocationService {
 
             console.log(`Creating warehouse: ${warehouseID} and lock table`);
 
-            await adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+            await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
 
             // create the lock table
             const lockTable = warehouseID + WAREHOUSE_LOCK_TABLE_SUFFIX
-            await this.papiClient.addons.data.schemes.post({
+            await this.addonService.papiClient.addons.data.schemes.post({
                 Name: lockTable,
                 Type: 'data'
             });
@@ -553,15 +404,13 @@ export class InventoryAllocationService {
     }
 
     async getWarehouses(options: any): Promise<Warehouse[]> {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        return await adal.table(WAREHOUSE_TABLE_NAME).iter(options).toArray() as Warehouse[];
+        return await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).iter(options).toArray() as Warehouse[];
     }
 
     async getUserAllocation(warehouseID: string, userID: string, item: string): Promise<UserAllocation | undefined> {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
         const key = [warehouseID, userID, item].join('_');
         try {
-            return await adal.table(USER_ALLOCATION_TABLE_NAME).key(key).get() as UserAllocation;
+            return await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).key(key).get() as UserAllocation;
         }
         catch (err) {
             // todo: check that this is 404
@@ -570,19 +419,17 @@ export class InventoryAllocationService {
     } 
 
     async getUserAllocations(options: any): Promise<UserAllocation[]> {
-        return this.papiClient.addons.data.uuid(this.addonUUID).table(USER_ALLOCATION_TABLE_NAME).iter().toArray() as Promise<UserAllocation[]>;
+        return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter().toArray() as Promise<UserAllocation[]>;
     }
 
     async upsertUserAllocation(alloc: any) {
         const obj: UserAllocation = alloc;
         obj.Key = [obj.WarehouseID, obj.UserID, obj.ItemExternalID].join('_');
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        return adal.table(USER_ALLOCATION_TABLE_NAME).upsert(obj) as Promise<UserAllocation>;
+        return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).upsert(obj) as Promise<UserAllocation>;
     }
 
     async getOrderAllocations(warehouseID: string): Promise<OrderAllocation[]> {
-        const adal = this.papiClient.addons.data.uuid(this.addonUUID);
-        return await adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
+        return await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
             where: `WarehouseID = '${warehouseID}'`
         }).toArray() as OrderAllocation[];
     }

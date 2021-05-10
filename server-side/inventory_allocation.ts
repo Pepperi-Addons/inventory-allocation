@@ -1,5 +1,6 @@
-import { InventoryAllocationService } from './inventory-allocation.service'
+import { InventoryAllocationService } from './services/inventory-allocation.service'
 import { Client, Request } from '@pepperi-addons/debug-server'
+import { PapiClient } from '@pepperi-addons/papi-sdk';
 
 /**
  * POST /inventory_allocation/rebase_inventory
@@ -109,4 +110,11 @@ export async function warehouses(client, request) {
 export async function order_allocations(client, request) {
     const service = new InventoryAllocationService(client);
     return service.getOrderAllocations(request.query.warehouse);
+}
+
+export async function test(client: Client) {
+    return new PapiClient({
+        baseURL: 'https://papi.pepperi.com/v1.0',
+        token: client.OAuthAccessToken
+    }).accounts.iter().toArray();
 }

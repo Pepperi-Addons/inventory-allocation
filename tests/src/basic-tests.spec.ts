@@ -517,7 +517,6 @@ describe('Basic tests', function () {
         '4': 150
       });
       expect(warehouse.UserAllocations).to.deep.equals({
-        '1': 0,
         '3': 25,
       });
     })

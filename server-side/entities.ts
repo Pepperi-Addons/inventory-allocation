@@ -50,20 +50,11 @@ export interface OrderAllocation extends AddonData {
     ItemAllocations: { [key: string]: number }
 
     /**
-     * Allocations that are temp because they haven't been finialized
+     * The expirey date of the temp allocation in GMT ISO format
      */
-    TempAllocation: { 
-        
-        /**
-         * The expirey date of the temp allocation in GMT ISO format
-         */
-        Expires: string;
+    TempAllocationExpires: number;
 
-        /**
-         * Allocations that have been subtracted from the Inventory
-         */
-        ItemAllocations: { [key: string]: number }
-    } | undefined | null;
+    TempItemAllocations?: { [key: string]: number } | null
 }
 
 /**
@@ -118,5 +109,5 @@ export const ORDER_ALLOCATION_TABLE_NAME = 'OrderAllocation';
 export const WAREHOUSE_TABLE_NAME = 'Warehouse';
 export const USER_ALLOCATION_TABLE_NAME = 'UserAllocation';
 export const USER_ALLOCATION_UDT_NAME = 'UserAllocation';
-export const WAREHOUSE_INVENTORY_UDT_NAME = 'WarehouseItemInventory';
+export const WAREHOUSE_INVENTORY_UDT_NAME = 'WarehouseInventory';
 export const WAREHOUSE_LOCK_TABLE_SUFFIX = '_Lock';

@@ -43,7 +43,8 @@ export class WarehouseLockService {
             while (!first) {
                 const l = await adal.find({
                     // page_size: 1, doesn't work - returns empty array
-                    order_by: 'CreationDateTime' 
+                    order_by: 'CreationDateTime',
+                    fields: ['Key']
                 });
 
                 if (l.length === 0) {
@@ -120,6 +121,7 @@ export class WarehouseLockService {
 
     async checkForStaleLocks(warehouseID: string) {
         const locks = await this.addonService.adal.table(warehouseID + WAREHOUSE_LOCK_TABLE_SUFFIX).iter({
+            fields: ['Key', 'CreationDateTime']
         }).toArray();
         for (const lock of locks) {
             if (new Date(lock.CreationDateTime!) < new Date(new Date().getTime() - 60*1000)) {

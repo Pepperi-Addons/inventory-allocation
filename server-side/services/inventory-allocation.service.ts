@@ -1,9 +1,9 @@
 import { Client } from '@pepperi-addons/debug-server';
-import { OrderAllocation, ORDER_ALLOCATION_TABLE_NAME, UserAllocation, USER_ALLOCATION_TABLE_NAME, Warehouse, WAREHOUSE_TABLE_NAME, WAREHOUSE_LOCK_TABLE_SUFFIX } from '../entities';
+import { OrderAllocation, ORDER_ALLOCATION_TABLE_NAME, UserAllocation, USER_ALLOCATION_TABLE_NAME, Warehouse, WAREHOUSE_TABLE_NAME, WAREHOUSE_LOCK_TABLE_SUFFIX, WAREHOUSE_INVENTORY_UDT_NAME, USER_ALLOCATION_UDT_NAME } from '../entities';
 import { performance } from 'perf_hooks'
 import { AddonService } from './addon.service';
 import { WarehouseLockService } from './warehouse-lock.service';
-import { between } from '../helpers';
+import { between, valueOrZero } from '../helpers';
 
 const ORDER_TEMP_ALLOCATION_TIME_IN_MINUTES = 1;
 
@@ -30,9 +30,7 @@ export class InventoryAllocationService {
         // make sure that the warehouse exists, if not - create it
         await this.createWarehouseIfNeeded(warehouseID);
 
-        // use later to update the UDT and for logging purposes
-        const originalInventories = JSON.parse(JSON.stringify(inventories));
-
+        // update under lock
         await this.lockService.performInLock(warehouseID, async () => {
             const t0 = performance.now();
 
@@ -47,12 +45,12 @@ export class InventoryAllocationService {
             // subtract the order allocations per item
             for (const alloc of orderAllocations) {
                 for (const item in alloc.ItemAllocations) {
-                    inventories[item] -= alloc.ItemAllocations[item];
+                    inventories[item] = valueOrZero(inventories[item]) - valueOrZero(alloc.ItemAllocations[item]);
                 }
 
-                if (alloc.TempAllocation) {
-                    for (const item in alloc.TempAllocation.ItemAllocations) {
-                        inventories[item] -= alloc.TempAllocation.ItemAllocations[item];
+                if (alloc.TempItemAllocations) {
+                    for (const item in alloc.TempItemAllocations) {
+                        inventories[item] = valueOrZero(inventories[item]) - valueOrZero(alloc.TempItemAllocations[item]);
                     }
                 }
             }
@@ -97,15 +95,13 @@ export class InventoryAllocationService {
      * @param orders an array of orders to commit
      */
     async commitAllocations(warehouseID: string, orders: { OrderUUID: string }[]) {
-        await this.lockService.performInLock(warehouseID, async () => {
-            // need to optimize - bulk upsert
-            for (const order of orders) {
-                await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
-                    Key: order.OrderUUID,
-                    Hidden: true
-                });
-            }
-        })
+        // need to optimize - bulk upsert
+        for (const order of orders) {
+            await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
+                Key: order.OrderUUID,
+                Hidden: true
+            });
+        }
     }
 
     /**
@@ -130,7 +126,8 @@ export class InventoryAllocationService {
                 WarehouseID: warehouseID,
                 UserID: userID,
                 ItemAllocations: {},
-                TempAllocation: undefined
+                TempItemAllocations: undefined,
+                TempAllocationExpires: 0
             };
             
             // check if there already is an order
@@ -159,37 +156,36 @@ export class InventoryAllocationService {
 
             // 4. Update the OrderAllocation object
             if (res.Success) {
-                existing.TempAllocation = undefined;
+                existing.TempAllocationExpires = 0;
+                existing.TempItemAllocations = null;
                 existing.ItemAllocations = items;
             }
             else {
-                if (!existing.TempAllocation) {
-                    existing.TempAllocation = {
-                        Expires: '',
-                        ItemAllocations: {}
+                if (!existing.TempItemAllocations) {
+                    existing.TempItemAllocations = {
                     }
                 }
 
                 // update the expiry date
-                existing.TempAllocation.Expires = (new Date(new Date().getTime() + warehouse.TempAllocationTime*60*1000)).toISOString();
+                existing.TempAllocationExpires = (new Date(new Date().getTime() + warehouse.TempAllocationTime*60*1000)).getTime();
 
                 // set the newAllocation in the TempAllocations
                 for (const item in newAllocations) {
                     let quantity = newAllocations[item];
                     
                     // no temp allocation for this item yet, create it
-                    if (existing.TempAllocation.ItemAllocations[item] === undefined) {
-                        existing.TempAllocation.ItemAllocations[item] = 0;
+                    if (existing.TempItemAllocations[item] === undefined) {
+                        existing.TempItemAllocations[item] = 0;
                     }
 
                     // add quantity to temp allocation
-                    existing.TempAllocation.ItemAllocations[item] += quantity;
+                    existing.TempItemAllocations[item] += quantity;
 
                     // the quantity might be negative, in that case we might need to subtract from a real allocation
                     // after subtracting from the temp allocation
-                    if (existing.TempAllocation.ItemAllocations[item] < 0) {
-                        existing.ItemAllocations[item] += existing.TempAllocation.ItemAllocations[item];
-                        existing.TempAllocation.ItemAllocations[item] = 0;
+                    if (existing.TempItemAllocations[item] < 0) {
+                        existing.ItemAllocations[item] += existing.TempItemAllocations[item];
+                        existing.TempItemAllocations[item] = 0;
                     }
                 }
             }
@@ -273,29 +269,29 @@ export class InventoryAllocationService {
 
         // get all warehouses
         const warehouses = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).iter({ fields: ['Key'] }).toArray();
-        
-        await Promise.all(warehouses.map(warehouse => this.lockService.checkForStaleLocks(warehouse.Key)));
 
-        // get all the order allocation
-        let orderAllocations = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter().toArray() as OrderAllocation[];
+        await Promise.all(warehouses.map(async obj => {
+            
+            // make sure the lock isn't stuck
+            await this.lockService.checkForStaleLocks(obj.Key);
+            
+            // check the user allocations under lock
+            await this.lockService.performInLock(obj.Key, async () => {
 
-        // only order allocations with temp allocations that have expired
-        orderAllocations = orderAllocations.filter(order => order.TempAllocation && new Date(order.TempAllocation.Expires) < new Date());
+                // get all the order allocation that have expired
+                let orderAllocations = await this.getOrderAllocations({
+                    where: `WarehouseID = '${obj.Key}' AND TempAllocationExpires > 0 AND TempAllocationExpires < ${new Date().getTime()}`
+                });
 
-        for (const obj of orderAllocations) {
-            await this.lockService.performInLock(obj.WarehouseID, async () => {
-                // need to retrieve the order again b/c it might have changed b/c we were not in a lock
-                const order = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(obj.Key).get() as OrderAllocation;
-
-                // make sure that it is still expired
-                if (order.TempAllocation && new Date(order.TempAllocation.Expires) < new Date()) {
+                for (const order of orderAllocations) {
                     // update all inventories to minues the amount reserved
-                    const newAllocations = order.TempAllocation.ItemAllocations;
+                    const newAllocations = order.TempItemAllocations || {};
                     for (const item in newAllocations) {
                         newAllocations[item] = -newAllocations[item];
                     }
 
-                    order.TempAllocation = null;
+                    order.TempItemAllocations = null;
+                    order.TempAllocationExpires = 0;
 
                     // update the inventories
                     await this.updateInventory(newAllocations, order.WarehouseID, order.UserID);
@@ -303,24 +299,20 @@ export class InventoryAllocationService {
                     // update the order allocaiton
                     await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(order);
                 }
-            });
-        }
-
-        await Promise.all(warehouses.map(async obj => {
-            await this.lockService.performInLock(obj.Key, async () => {
                 
                 // get the warehouse again under lock
                 const warehouse = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).key(obj.Key).get() as Warehouse;
                 
+                let warehouseChanged = false;
+
                 // get all the user allocation
                 let userAllocations = await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter({
                     where: `WarehouseID = '${warehouse.WarehouseID}'`
                 }).toArray() as UserAllocation[];
-                
-                const totalUserAllocation: { [key: string]: number } = {};
 
                 // calculate the total user allocations
                 // and update the userAllocations
+                const totalUserAllocation: { [key: string]: number } = {};
                 for (const userAllocation of userAllocations) {
                     const validNow = between(new Date(), new Date(userAllocation.StartDateTime), new Date(userAllocation.EndDateTime));
                     const item = userAllocation.ItemExternalID;
@@ -341,7 +333,6 @@ export class InventoryAllocationService {
                     }
                 }
 
-                let warehouseChanged = false;
                 for (const item in warehouse.Inventory) {
                     let diff = (totalUserAllocation[item] || 0) - (warehouse.UserAllocations[item] || 0);
                     
@@ -365,10 +356,64 @@ export class InventoryAllocationService {
                     await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
                 }
             });
-        }))
+        }));
+
+         // update the UDT if the warehouse and/or has changed in the last 5 minutes
+         try {
+            const warehouses = await this.getWarehouses({
+                where: `ModificationDateTime > ${new Date(new Date().getTime() - 5*60*1000).getTime()}`
+            })
+            console.log(`${warehouses.length} warehouses have changed in the last 5 minutes`);
+            if (warehouses.length) {
+                this.addonService.papiClient.userDefinedTables.batch(
+                    warehouses.map(
+                        warehouse => Object.keys(warehouse.Inventory).map(
+                            item => {
+                                return {
+                                    MapDataExternalID: WAREHOUSE_INVENTORY_UDT_NAME,
+                                    MainKey: warehouse.Key,
+                                    SecondaryKey: item,
+                                    Values: [
+                                        JSON.stringify({
+                                            Quantity: warehouse.Inventory[item],
+                                            UserAllocations: warehouse.UserAllocations[item]
+                                        })
+                                    ]
+                                }
+                            }
+                        )
+                    ).flat()
+                );
+            }
+
+            // update User Allocations UDT
+            const userAllocations = await this.getUserAllocations({
+                where: `ModificationDateTime > ${new Date(new Date().getTime() - 5*60*1000).getTime()}`
+            });
+            console.log(`${userAllocations.length} user allocations have changed in the last 5 minutes`);
+            if (userAllocations.length > 0) {
+                this.addonService.papiClient.userDefinedTables.batch(
+                    userAllocations.map(userAllocation => {
+                        return {
+                            MapDataExternalID: USER_ALLOCATION_UDT_NAME,
+                            MainKey: userAllocation.UserID,
+                            SecondaryKey: [userAllocation.WarehouseID, userAllocation.ItemExternalID].join('_'),
+                            Values: [JSON.stringify({
+                                Allocated: userAllocation.Allocated,
+                                UsedAllocation: userAllocation.UsedAllocation,
+                                MaxAllocation: userAllocation.MaxAllocation
+                            })]
+                        }
+                    })
+                )
+            }
+        }
+        catch(err) {
+            console.log("error updating UDTs: ", err);
+        }
 
         const t1 = performance.now();
-        console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses, ${orderAllocations.length} order allocations`)
+        console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses`)
     }
 
     async getWarehouse(warehouseID: string): Promise<Warehouse> {
@@ -419,7 +464,7 @@ export class InventoryAllocationService {
     } 
 
     async getUserAllocations(options: any): Promise<UserAllocation[]> {
-        return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter().toArray() as Promise<UserAllocation[]>;
+        return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter(options).toArray() as Promise<UserAllocation[]>;
     }
 
     async upsertUserAllocation(alloc: any) {
@@ -428,10 +473,8 @@ export class InventoryAllocationService {
         return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).upsert(obj) as Promise<UserAllocation>;
     }
 
-    async getOrderAllocations(warehouseID: string): Promise<OrderAllocation[]> {
-        return await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
-            where: `WarehouseID = '${warehouseID}'`
-        }).toArray() as OrderAllocation[];
+    async getOrderAllocations(options): Promise<OrderAllocation[]> {
+        return await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter(options).toArray() as OrderAllocation[];
     }
 
     async calculateNewAllocations(orderAllocation: OrderAllocation, items: { [key: string]: number }) {
@@ -442,8 +485,10 @@ export class InventoryAllocationService {
         for (const item in orderAllocation.ItemAllocations) {
             newAllocations[item] = -(orderAllocation.ItemAllocations[item] || 0);
         }
-        for (const item in orderAllocation.TempAllocation?.ItemAllocations || []) {
-            newAllocations[item] = (newAllocations[item] || 0) - (orderAllocation.TempAllocation?.ItemAllocations[item] || 0);
+        if (orderAllocation.TempItemAllocations) {
+            for (const item in orderAllocation.TempItemAllocations) {
+                newAllocations[item] = (newAllocations[item] || 0) - (orderAllocation.TempItemAllocations[item] || 0);
+            }
         }
 
         // add the new values

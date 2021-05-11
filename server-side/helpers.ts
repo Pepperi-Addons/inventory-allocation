@@ -18,3 +18,7 @@
 export function between(date: Date, before: Date, after: Date) {
     return date >= before && date <= after;
 }
+
+export function valueOrZero(val: number | undefined) {
+    return val || 0;
+}

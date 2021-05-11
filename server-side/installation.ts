@@ -32,8 +32,9 @@ export async function install(client: Client, request: Request): Promise<any> {
         Name: ORDER_ALLOCATION_TABLE_NAME,
         Type: 'data',
         Fields: {
-            WarehouseID: { Type: 'String' },
-            UserID: { Type: 'String' }
+            WarehouseID: { Type: 'String' }, 
+            UserID: { Type: 'String' },
+            TempAllocationExpires: { Type: 'Integer' }
         }
     });
 
@@ -60,9 +61,9 @@ export async function install(client: Client, request: Request): Promise<any> {
 
     await papiClient.metaData.userDefinedTables.upsert({
         TableID: USER_ALLOCATION_UDT_NAME,
-        MainKeyType: { // needs to be UserExternalID
-            ID: 0,
-            Name: ''
+        MainKeyType: {
+            ID: 23,
+            Name: 'Employee'
         },
         SecondaryKeyType: {
             ID: 0,
@@ -121,8 +122,8 @@ export async function uninstall(client: Client, request: Request): Promise<any> 
         TableID: USER_ALLOCATION_UDT_NAME,
         Hidden: true,
         MainKeyType: {
-            ID: 0,
-            Name: ''
+            ID: 23,
+            Name: 'Employee'
         },
         SecondaryKeyType: {
             ID: 0,

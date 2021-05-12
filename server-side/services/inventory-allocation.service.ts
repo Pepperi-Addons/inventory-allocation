@@ -216,11 +216,11 @@ export class InventoryAllocationService {
                 // calculate the amount to subtract from the users allocation
                 let toSubtract = 0;
                 if (quantity < 0) { 
-                    // deallocation: upto max - used
+                    // deallocation: upto max - (used + quantity)
                     // example:
                     // MaxAllocation: 20, UsedAllocation: 15, quantity: -8
                     // toSubtract = -5 (subtracting a negative number is adding)
-                    toSubtract = Math.max(quantity, userAllocation.UsedAllocation - userAllocation.MaxAllocation);
+                    toSubtract = -Math.min(-quantity, userAllocation.MaxAllocation - (userAllocation.UsedAllocation + quantity));
                 }
                 else if (quantity > 0) { 
                     // allocation

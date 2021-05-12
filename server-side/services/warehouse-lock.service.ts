@@ -5,7 +5,7 @@ import { AddonService } from "./addon.service";
 import { sleep } from "../helpers";
 import { performance } from 'perf_hooks'
 
-const MAXIMUM_LOCK_WAITING_TIME_IN_MS = 25000;
+const MAXIMUM_LOCK_WAITING_TIME_IN_MS = 22000;
 const LOCK_WAITING_ITERATION_TIME_IN_MS = 150;
 
 export class WarehouseLockService {
@@ -38,7 +38,7 @@ export class WarehouseLockService {
             // wait until you are the first in line
             // wait a maximum of 30
             let first = false;
-            let waitingTime = 0;
+            let waitUntil = new Date(new Date().getTime() + MAXIMUM_LOCK_WAITING_TIME_IN_MS) ;
 
             while (!first) {
                 const l = await adal.find({
@@ -56,14 +56,13 @@ export class WarehouseLockService {
                 }
                 else {
                     
-                    if (waitingTime >= MAXIMUM_LOCK_WAITING_TIME_IN_MS) {
+                    if (new Date() >= waitUntil) {
                         throw new Error(`Timeout (${MAXIMUM_LOCK_WAITING_TIME_IN_MS}ms) waiting for lock with key: ${key}.`)
                     }
 
                     // you are not the first -- wait until you are
                     console.log(`Waiting for the lock to be free. Current lock: ${l[0].Key}`);
                     await sleep(LOCK_WAITING_ITERATION_TIME_IN_MS);
-                    waitingTime += LOCK_WAITING_ITERATION_TIME_IN_MS;
                 }
             }
         }
@@ -104,9 +103,11 @@ export class WarehouseLockService {
             const t1 = performance.now();
             
             console.log(`Waiting on lock ${key} for warehouse ${warehouseID} took: ${(t1-t0).toFixed(2)}ms`);
-    
 
             await block();
+
+            const t2 = performance.now();
+            console.log(`Performing block operation under lock took: ${(t2-t1).toFixed(2)}ms`);
         }
         catch (err) {   
             // rethow to be handled by addon api

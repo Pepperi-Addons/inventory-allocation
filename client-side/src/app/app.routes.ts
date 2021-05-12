@@ -3,6 +3,7 @@ import { Routes, RouterModule } from '@angular/router';
 import { EmptyRouteComponent } from './components/empty-route/empty-route.component';
 import { AddonComponent } from './components/addon/addon.component';
 import { WarehouseComponent } from './components/warehouse/warehouse.component';
+import { OrderAllocationComponent } from './components/order-allocation/order-allocation.component';
 // import * as config from '../../../addon.config.json';
 
 const routes: Routes = [
@@ -17,6 +18,10 @@ const routes: Routes = [
                 path: 'warehouse/:warehouse_id',
                 component: WarehouseComponent
             },
+            {
+                path: 'order_allocation/:order_uuid',
+                component: OrderAllocationComponent
+            }
         ]
     },
     {

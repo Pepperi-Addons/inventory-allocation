@@ -1,13 +1,8 @@
 import {
     Component,
-    EventEmitter,
-    Input,
-    Output,
     OnInit,
-    ViewEncapsulation,
     Compiler,
     ViewChild,
-    OnDestroy,
 } from "@angular/core";
 import { TranslateService } from "@ngx-translate/core";
 import { Router, ActivatedRoute } from "@angular/router";
@@ -176,9 +171,29 @@ export class AddonComponent implements OnInit {
               Title: 'Warehouse',
               Mandatory: false,
               ReadOnly: true
+            },
+            {
+              FieldID: 'CreationDateTime',
+              Type: 'Date',
+              Title: 'Created',
+              Mandatory: false,
+              ReadOnly: true
+            },
+            {
+              FieldID: 'ModificationDateTime',
+              Type: 'Date',
+              Title: 'Modified',
+              Mandatory: false,
+              ReadOnly: true
             }
           ],
           Columns: [
+            {
+              Width: 25
+            },
+            {
+              Width: 25
+            },
             {
               Width: 25
             },

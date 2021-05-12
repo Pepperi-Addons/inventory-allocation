@@ -32,6 +32,7 @@ export async function install(client: Client, request: Request): Promise<any> {
         Name: ORDER_ALLOCATION_TABLE_NAME,
         Type: 'data',
         Fields: {
+            OrderUUID: { Type: 'String' },
             WarehouseID: { Type: 'String' }, 
             UserID: { Type: 'String' },
             TempAllocationExpires: { Type: 'Integer' }

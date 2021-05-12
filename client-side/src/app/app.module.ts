@@ -8,12 +8,10 @@ import { AppComponent } from './app.component';
 import { PepUIModule } from './modules/pepperi.module';
 import { MaterialModule } from './modules/material.module';
 import { ComponentsModule } from './modules/components.module';
-import { UserAllocationDialogComponent } from './components/user-allocation-dialog/user-allocation-dialog.component';
 
 @NgModule({
     declarations: [
         AppComponent,
-        UserAllocationDialogComponent,
     ],
     imports: [
         BrowserModule,

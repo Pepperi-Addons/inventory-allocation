@@ -5,14 +5,14 @@ import { AddonService } from '../addon/addon.service';
 import { GenericListDataSource } from '../generic-list/generic-list.component';
 
 @Component({
-  selector: 'addon-warehouse',
-  templateUrl: './warehouse.component.html',
-  styleUrls: ['./warehouse.component.scss']
+  selector: 'addon-order-allocation',
+  templateUrl: './order-allocation.component.html',
+  styleUrls: ['./order-allocation.component.scss']
 })
-export class WarehouseComponent implements OnInit {
+export class OrderAllocationComponent implements OnInit {
 
-  warehouseID: string = ''
-  warehouse;
+  orderUUID: string;
+  orderAllocation: any;
 
   constructor(
     private addonService: PepAddonService,
@@ -24,7 +24,7 @@ export class WarehouseComponent implements OnInit {
   ngOnInit(): void {
 
     this.pluginService.pluginUUID = this.route.snapshot.params['addon_uuid'];
-    this.warehouseID = this.route.snapshot.params['warehouse_id'];
+    this.orderUUID = this.route.snapshot.params['order_uuid'];
   }
 
   back() {
@@ -34,23 +34,26 @@ export class WarehouseComponent implements OnInit {
     })
   }
 
-  async getWarehouse() {
-    if (!this.warehouse) {
-      this.warehouse = await this.addonService.getAddonApiCall(
+  async getOrderAllocation() {
+    if (!this.orderAllocation) {
+      this.orderAllocation = await this.addonService.getAddonApiCall(
         this.pluginService.pluginUUID, 
         'inventory_allocation', 
-        `warehouses?where=WarehouseID='${this.warehouseID}'`
+        `order_allocations?where=OrderUUID='${this.orderUUID}'`
         ).toPromise().then(obj => obj[0]);
     }
-    return this.warehouse;
+    return this.orderAllocation;
   }
 
   dataSource: GenericListDataSource = {
     getList: (state) => {
-      return this.getWarehouse().then(warehouse => {
+      return this.getOrderAllocation().then(orderAllocation => {
           const res = [];
 
-          let keys = Object.keys(warehouse.Inventory);
+          let keys = [...new Set([ 
+            ...Object.keys(orderAllocation.ItemAllocations),
+            ...Object.keys(orderAllocation.TempItemAllocations || {})
+          ])];
           
           if (state.searchString) {
             keys = keys.filter(key => key.toLowerCase().includes(state.searchString.toLowerCase()))
@@ -59,8 +62,8 @@ export class WarehouseComponent implements OnInit {
           for (const item of keys) {
             res.push({
               Item: item,
-              Quantity: warehouse.Inventory[item].toString(),
-              UserAllocations: (warehouse.UserAllocations[item] || 0).toString()
+              Allocated: orderAllocation.ItemAllocations[item].toString(),
+              TempAllocated: ((orderAllocation.TempItemAllocations|| {})[item] || 0).toString()
             })
           }
 
@@ -88,21 +91,24 @@ export class WarehouseComponent implements OnInit {
               ReadOnly: true
             },
             {
-              FieldID: 'Quantity',
+              FieldID: 'Allocated',
               Type: 'TextBox',
-              Title: 'Quantity',
+              Title: 'Allocation',
               Mandatory: false,
               ReadOnly: true
             },
             {
-              FieldID: 'UserAllocations',
+              FieldID: 'TempAllocated',
               Type: 'TextBox',
-              Title: 'Allocated to Users',
+              Title: 'Temporary Allocation',
               Mandatory: false,
               ReadOnly: true
             }
           ],
           Columns: [
+            {
+              Width: 25
+            },
             {
               Width: 25
             },
@@ -115,4 +121,5 @@ export class WarehouseComponent implements OnInit {
         }
     }
   }
+
 }

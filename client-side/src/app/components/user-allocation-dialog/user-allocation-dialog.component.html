@@ -6,15 +6,15 @@
         <div class="grid-container"> 
             <div class="user">
                 <pep-textbox [label]="'User' | translate" [value]="userAllocation.UserID" [disabled]="mode == 'Update'"
-                [type]="'text'" [required]="true" (valueChange)="onValueChanged('UserID', $event.value)"></pep-textbox>
+                [type]="'text'" [required]="mode !== 'Update'" (valueChange)="onValueChanged('UserID', $event.value)"></pep-textbox>
             </div>
             <div class="warehouse">
                 <pep-textbox [label]="'Warehouse' | translate" [value]="userAllocation.WarehouseID" [disabled]="mode == 'Update'"
-                [type]="'text'" [required]="true" (valueChange)="onValueChanged('WarehouseID', $event.value)"></pep-textbox>
+                [type]="'text'" [required]="mode !== 'Update'" (valueChange)="onValueChanged('WarehouseID', $event.value)"></pep-textbox>
             </div>
             <div class="item">
                 <pep-textbox [label]="'Item' | translate" [value]="userAllocation.ItemExternalID" [disabled]="mode == 'Update'"
-                [type]="'text'" [required]="true" (valueChange)="onValueChanged('ItemExternalID', $event.value)"></pep-textbox>
+                [type]="'text'" [required]="mode !== 'Update'" (valueChange)="onValueChanged('ItemExternalID', $event.value)"></pep-textbox>
             </div>
 
             <div class="allocation">
@@ -25,7 +25,7 @@
                 <pep-date [label]="'Starts' | translate" [value]="getDateValue(userAllocation.StartDateTime)" [required]="true" (valueChange)="onDateChange('StartDateTime', $event.value)"></pep-date>
             </div>
             <div class="ends">
-                <pep-date [label]="'Starts' | translate" [value]="getDateValue(userAllocation.EndDateTime)" [required]="true" (valueChange)="onDateChange('EndDateTime', $event.value)"></pep-date>
+                <pep-date [label]="'Ends' | translate" [value]="getDateValue(userAllocation.EndDateTime)" [required]="true" (valueChange)="onDateChange('EndDateTime', $event.value)"></pep-date>
             </div>
         </div>
     </div>

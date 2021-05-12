@@ -1,2 +1,13 @@
 @import 'ngx-lib/src/core/style/abstracts/mixins';
 @import 'ngx-lib/src/core/style/abstracts/variables';
+
+.inline-top-bar-container {
+    margin-top: 1rem;
+
+    ::ng-deep .search-container {
+        .mat-form-field-flex {
+            height: 32px !important; 
+            min-height: unset !important;
+        }
+    }
+}

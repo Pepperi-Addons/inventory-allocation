@@ -1,18 +1,20 @@
 
 <div class="addon-page-container">
-    <pep-top-bar [title]="title" [inline]="inline">
-        <div header-start-content>
-            <ng-content select="[left-buttons]"></ng-content>
-        </div>
-        <div  header-end-content>
-            <ng-content select="[right-buttons]"></ng-content>
-        </div>
-        <pep-list-actions [actions]="menuActions" (actionClick)="onMenuItemClicked($event)"></pep-list-actions>
-        <pep-list-total [totalRows]="customList ? customList.totalRows : -1"></pep-list-total>
-
-        <pep-search *ngIf="showSearch" [value]="searchString" (search)="onSearchChanged($event)">
-        </pep-search>
-    </pep-top-bar>
+    <div [ngClass]="{ 'inline-top-bar-container' : inline }">
+        <pep-top-bar [title]="title" [inline]="inline">
+            <div header-start-content>
+                <ng-content select="[left-buttons]"></ng-content>
+            </div>
+            <div  header-end-content>
+                <ng-content select="[right-buttons]"></ng-content>
+            </div>
+            <pep-list-actions [sizeType]="inline ? 'sm' : 'md'" [actions]="menuActions" (actionClick)="onMenuItemClicked($event)"></pep-list-actions>
+            <pep-list-total [totalRows]="customList ? customList.totalRows : -1"></pep-list-total>
+    
+            <pep-search *ngIf="showSearch" (search)="onSearchChanged($event)">
+            </pep-search>
+        </pep-top-bar>
+    </div>
 
     <ng-container *ngIf="inline; then inlineBlock; else regularBlock"></ng-container>
     

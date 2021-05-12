@@ -8,9 +8,12 @@
         <mat-tab-group #tabGroup animationDuration="0ms" class="fixed-header">
             <mat-tab label="{{ 'User Allocations' | translate}}">
                 <ng-template matTabContent>
+                    <p>
+                        Edit & Create the User Allocations
+                    </p>
                     <generic-list #userAllocationList [showSearch]="true" [inline]="true" [dataSource]="userDatasource">
                         <div right-buttons>
-                            <pep-button [value]="'Add' | translate" [iconName]="'number_plus'" [iconPosition]="'end'" [sizeType]="''" [styleType]="'strong'" [classNames]="'pep-spacing-element'" (buttonClick)="add()"></pep-button>
+                            <pep-button [value]="'Add' | translate" [iconName]="'number_plus'" [iconPosition]="'end'" [sizeType]="'sm'" [styleType]="'strong'" [classNames]="'pep-spacing-element'" (buttonClick)="add()"></pep-button>
                         </div>
                     </generic-list>
                 </ng-template>
@@ -18,12 +21,18 @@
            
             <mat-tab label="{{ 'Warehouses' | translate}}">
                 <ng-template matTabContent>
+                    <p>
+                        View the Warehouses inventory
+                    </p>
                     <generic-list [inline]="true" [dataSource]="warehouseDatasource"></generic-list>
                 </ng-template>
             </mat-tab>
 
             <mat-tab label="{{ 'Order Allocations' | translate}}">
                 <ng-template matTabContent>
+                    <p>
+                        View the current Order Allocations
+                    </p>
                     <generic-list [inline]="true" [dataSource]="orderAllocationsDatasource">
                     </generic-list>
                 </ng-template>

@@ -115,7 +115,13 @@ export class InventoryAllocationService {
      * @returns 
      */
     async allocateOrderInventory(warehouseID: string, orderUUID: string, userID: string, items: { [key: string]: number }): Promise<{ Success: boolean, AllocationAvailability: { [key: string]: number } }> {
-        let res: any = undefined;
+        let res: {
+            Success: boolean,
+            AllocationAvailability: { [key: string]: number }
+        } = {
+            Success: true,
+            AllocationAvailability: {}
+        };
 
         // first lock the warehouse
         await this.lockService.performInLock(warehouseID, async () => {
@@ -149,7 +155,7 @@ export class InventoryAllocationService {
             const newAllocations = await this.calculateNewAllocations(existing, items);
 
             // 2. Check if the allocation will succeed aka be a real allocation (not temp)
-            res = await this.checkAllocationAvailability(warehouse, userID, newAllocations);
+            res.Success = await this.checkAllocationAvailability(warehouse, userID, newAllocations);
 
             // 3. Perform the allocation (update warehouse inventory & user allocation)
             await this.updateInventory(newAllocations, warehouseID, userID);
@@ -186,6 +192,12 @@ export class InventoryAllocationService {
                     if (existing.TempItemAllocations[item] < 0) {
                         existing.ItemAllocations[item] += existing.TempItemAllocations[item];
                         existing.TempItemAllocations[item] = 0;
+                    }
+
+                    // if the item isn't fully allocated as requested - mark it as missing
+                    const allocated = valueOrZero(existing.TempItemAllocations[item]) + valueOrZero(existing.ItemAllocations[item]);
+                    if (items[item] > allocated) {
+                        res.AllocationAvailability[item] = allocated;
                     }
                 }
             }
@@ -500,13 +512,7 @@ export class InventoryAllocationService {
     }
 
     async checkAllocationAvailability(warehouse: Warehouse, userID: string, allocations: { [key: string]: number }) {
-        const res: { 
-            Success: boolean, 
-            AllocationAvailability: { [key: string ]: number } 
-        } = {
-            Success: true,
-            AllocationAvailability: {}
-        };
+        let res = true;
         
         // check if allocation will succeed
         for (const item in allocations) {
@@ -527,11 +533,8 @@ export class InventoryAllocationService {
                 
                 if (available < quantity) {
                     // this means that it will be a temp allocation
-                    res.Success = false;
+                    res = false;
                     allocations[item] = available;
-
-                    // mark this item in the res object
-                    res.AllocationAvailability[item] = available;
                 }
             }
         }

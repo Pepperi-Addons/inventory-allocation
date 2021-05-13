@@ -43,6 +43,8 @@ export async function install(client: Client, request: Request): Promise<any> {
         Name: USER_ALLOCATION_TABLE_NAME,
         Type: 'data',
         Fields: {
+            UserID: { Type: 'String' },
+            ItemExternalID: { Type: 'String' },
             WarehouseID: { Type: 'String' },
             Allocated: { Type: 'Bool' }
         }

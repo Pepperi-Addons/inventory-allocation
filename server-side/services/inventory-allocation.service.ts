@@ -151,14 +151,19 @@ export class InventoryAllocationService {
             // bring the warehouse inventory
             const warehouse = await this.getWarehouse(warehouseID);
 
+            // get all the user allocations for this warehouse
+            const userAllocations = await this.getUserAllocations({
+                where: `WarehouseID = '${warehouseID}' AND UserID = '${userID}'`
+            });
+
             // 1. Calculate the amount to allocated or deallocate per item
             const newAllocations = await this.calculateNewAllocations(existing, items);
 
             // 2. Check if the allocation will succeed aka be a real allocation (not temp)
-            res.Success = await this.checkAllocationAvailability(warehouse, userID, newAllocations);
+            res.Success = await this.checkAllocationAvailability(warehouse, userAllocations, newAllocations);
 
             // 3. Perform the allocation (update warehouse inventory & user allocation)
-            await this.updateInventory(newAllocations, warehouseID, userID);
+            await this.updateInventory(newAllocations, warehouse, userAllocations);
 
             // 4. Update the OrderAllocation object
             if (res.Success) {
@@ -216,13 +221,11 @@ export class InventoryAllocationService {
      * @param warehouse the warehouse object to udpate
      * @param userAllocation the user allocation to update
      */
-    async updateInventory(allocations: {[key: string]: number}, warehouseID: string, userID: string) {
-        const warehouse = await this.getWarehouse(warehouseID);
-
+    async updateInventory(allocations: {[key: string]: number}, warehouse: Warehouse, userAllocations: UserAllocation[]) {
         // update the inventory
         for (const item in allocations) {
             let quantity = allocations[item];
-            const userAllocation = await this.getUserAllocation(warehouseID, userID, item);
+            const userAllocation = userAllocations.find(alloc => alloc.ItemExternalID === item);
             if (userAllocation && userAllocation.Allocated) {
 
                 // calculate the amount to subtract from the users allocation
@@ -289,6 +292,13 @@ export class InventoryAllocationService {
             
             // check the user allocations under lock
             await this.lockService.performInLock(obj.Key, async () => {
+                // get the warehouse again under lock
+                const warehouse = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).key(obj.Key).get() as Warehouse;
+
+                // get all the user allocation
+                let userAllocations = await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter({
+                    where: `WarehouseID = '${warehouse.WarehouseID}'`
+                }).toArray() as UserAllocation[];
 
                 // get all the order allocation that have expired
                 let orderAllocations = await this.getOrderAllocations({
@@ -306,21 +316,13 @@ export class InventoryAllocationService {
                     order.TempAllocationExpires = 0;
 
                     // update the inventories
-                    await this.updateInventory(newAllocations, order.WarehouseID, order.UserID);
+                    await this.updateInventory(newAllocations, warehouse, userAllocations.filter(alloc => alloc.UserID === order.UserID));
 
                     // update the order allocaiton
                     await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert(order);
                 }
                 
-                // get the warehouse again under lock
-                const warehouse = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).key(obj.Key).get() as Warehouse;
-                
                 let warehouseChanged = false;
-
-                // get all the user allocation
-                let userAllocations = await this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter({
-                    where: `WarehouseID = '${warehouse.WarehouseID}'`
-                }).toArray() as UserAllocation[];
 
                 // calculate the total user allocations
                 // and update the userAllocations
@@ -511,7 +513,7 @@ export class InventoryAllocationService {
         return newAllocations;
     }
 
-    async checkAllocationAvailability(warehouse: Warehouse, userID: string, allocations: { [key: string]: number }) {
+    async checkAllocationAvailability(warehouse: Warehouse, userAllocations: UserAllocation[], allocations: { [key: string]: number }) {
         let res = true;
         
         // check if allocation will succeed
@@ -523,7 +525,7 @@ export class InventoryAllocationService {
 
                 // if not check if there is a user allocaiton
                 if (available < quantity) {
-                    const userAllocation = await this.getUserAllocation(warehouse.WarehouseID, userID, item);
+                    const userAllocation = userAllocations.find(alloc => alloc.ItemExternalID == item);
                     if (userAllocation && userAllocation.Allocated) {
                         const remaining = Math.max(0, userAllocation.MaxAllocation - userAllocation.UsedAllocation);
                         const totalUserAllocations = warehouse.UserAllocations[item];

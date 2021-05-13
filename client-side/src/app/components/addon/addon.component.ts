@@ -233,17 +233,35 @@ export class AddonComponent implements OnInit {
           ));
     },
     getActions: async (obj) => {
-        if (obj) {
-            return [
-                {
-                    title: this.translate.instant('Edit'),
-                    handler: async (obj) => {
-                        this.showUserAllocationDialog(obj);
-                    }
-                }
-            ]
+      const res = [];  
+      if (obj) {
+        res.push({
+          title: this.translate.instant('Edit'),
+          handler: async (obj) => {
+              this.showUserAllocationDialog(obj);
+          }
+        });
+
+        if (!obj.Allocated) {
+          res.push({
+            title: this.translate.instant('Delete'),
+            handler: async (obj) => {
+              this.addonService.postAddonApiCall(
+                this.pluginService.pluginUUID, 
+                'inventory_allocation', 
+                'user_allocations', {
+                  WarehouseID: obj.WarehouseID,
+                  ItemExternalID: obj.ItemExternalID,
+                  UserID: obj.UserID,
+                  Hidden: true
+                })
+                .toPromise()
+                .then(() => this.userAllocationList.reload())
+            }
+          });
         }
-        return []
+      }
+      return res
     },
     getDataView: async () => {
         return {

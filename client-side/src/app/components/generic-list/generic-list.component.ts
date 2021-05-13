@@ -143,19 +143,11 @@ export class GenericListComponent implements OnInit, AfterViewInit {
           const dataView = await this.dataSource.getDataView();
           const tableData = this.dataObjects.map(x => this.convertToPepRowData(x, dataView));
           const data = this.dataConvertorService.convertListData(tableData);
-          data.Rows.forEach((obj, i) => {
+          data.forEach((obj, i) => {
             this.dataObjects[i].UID = obj.UID;
           })
-          this.customList.initListData(data.UIControl, data.Rows.length, data.Rows.map(obj => {
-            return {
-              Success: true, 
-              ErrorMessage: '',
-              Data: obj,
-              Type: "",
-              UIControl: data.UIControl,
-              IsEditable: false
-            }
-          }), 'table')
+          const uiControl = this.dataConvertorService.getUiControl(tableData[0]);
+          this.customList.initListData(uiControl, data.length, data, 'table');
         
           this.loadMenuItems();
       }

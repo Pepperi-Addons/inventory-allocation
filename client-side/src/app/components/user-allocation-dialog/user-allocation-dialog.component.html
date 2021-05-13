@@ -5,30 +5,31 @@
     <div mat-dialog-content class="mat-dialog-content">
         <div class="grid-container"> 
             <div class="user">
-                <pep-textbox [label]="'User' | translate" [value]="userAllocation.UserID" [disabled]="mode == 'Update'"
-                [type]="'text'" [required]="mode !== 'Update'" (valueChange)="onValueChanged('UserID', $event.value)"></pep-textbox>
+                <pep-textbox [label]="'User' | translate" [(value)]="userAllocation.UserID" [disabled]="mode == 'Update'"
+                [type]="'text'" [mandatory]="mode !== 'Update'"></pep-textbox>
             </div>
             <div class="warehouse">
-                <pep-textbox [label]="'Warehouse' | translate" [value]="userAllocation.WarehouseID" [disabled]="mode == 'Update'"
-                [type]="'text'" [required]="mode !== 'Update'" (valueChange)="onValueChanged('WarehouseID', $event.value)"></pep-textbox>
+                <pep-textbox [label]="'Warehouse' | translate" [(value)]="userAllocation.WarehouseID" [disabled]="mode == 'Update'"
+                [type]="'text'" [mandatory]="mode !== 'Update'"></pep-textbox>
             </div>
             <div class="item">
-                <pep-textbox [label]="'Item' | translate" [value]="userAllocation.ItemExternalID" [disabled]="mode == 'Update'"
-                [type]="'text'" [required]="mode !== 'Update'" (valueChange)="onValueChanged('ItemExternalID', $event.value)"></pep-textbox>
+                <pep-textbox [label]="'Item' | translate" [(value)]="userAllocation.ItemExternalID" [disabled]="mode == 'Update'"
+                [type]="'text'" [mandatory]="mode !== 'Update'"></pep-textbox>
             </div>
 
             <div class="allocation">
                 <pep-textbox [label]="'Allocation' | translate" [value]="userAllocation.MaxAllocation.toString()"
-                [type]="'int'" [required]="true" (valueChange)="onNumberChange('MaxAllocation',  $event.value)"></pep-textbox>
+                [type]="'int'" [mandatory]="true" (valueChange)="onNumberChange('MaxAllocation', $event)"></pep-textbox>
             </div>
             <div class="starts">
-                <pep-date [label]="'Starts' | translate" [value]="getDateValue(userAllocation.StartDateTime)" [required]="true" (valueChange)="onDateChange('StartDateTime', $event.value)"></pep-date>
+                <pep-date [label]="'Starts' | translate" [value]="getDateValue(userAllocation.StartDateTime)" [mandatory]="true" (valueChange)="onDateChange('StartDateTime', $event)"></pep-date>
             </div>
             <div class="ends">
-                <pep-date [label]="'Ends' | translate" [value]="getDateValue(userAllocation.EndDateTime)" [required]="true" (valueChange)="onDateChange('EndDateTime', $event.value)"></pep-date>
+                <pep-date [label]="'Ends' | translate" [value]="getDateValue(userAllocation.EndDateTime)" [mandatory]="true" (valueChange)="onDateChange('EndDateTime', $event)"></pep-date>
             </div>
         </div>
     </div>
+
     <div mat-dialog-actions class="pepperi-border-top mat-dialog-actions split-actions"
         style="justify-content: flex-end;">
         <div class="spacing-element-negative">

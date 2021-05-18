@@ -481,10 +481,13 @@ export class InventoryAllocationService {
         return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).iter(options).toArray() as Promise<UserAllocation[]>;
     }
 
-    async upsertUserAllocation(alloc: any) {
-        const obj: UserAllocation = alloc;
-        obj.Key = [obj.WarehouseID, obj.UserID, obj.ItemExternalID].join('_');
-        return this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).upsert(obj) as Promise<UserAllocation>;
+    async upsertUserAllocation(obj: UserAllocation) {
+        let res: any = undefined;
+        await this.lockService.performInLock(obj.WarehouseID, async () => {
+            obj.Key = [obj.WarehouseID, obj.UserID, obj.ItemExternalID].join('_');
+            res = this.addonService.adal.table(USER_ALLOCATION_TABLE_NAME).upsert(obj) as Promise<UserAllocation>;
+        });
+        return res;
     }
 
     async getOrderAllocations(options): Promise<OrderAllocation[]> {

@@ -8,10 +8,12 @@
                 <pep-textbox [label]="'User' | translate" [(value)]="userAllocation.UserID" [disabled]="mode == 'Update'"
                 [type]="'text'" [mandatory]="mode !== 'Update'"></pep-textbox>
             </div>
+
             <div class="warehouse">
                 <pep-textbox [label]="'Warehouse' | translate" [(value)]="userAllocation.WarehouseID" [disabled]="mode == 'Update'"
                 [type]="'text'" [mandatory]="mode !== 'Update'"></pep-textbox>
             </div>
+            
             <div class="item">
                 <pep-textbox [label]="'Item' | translate" [(value)]="userAllocation.ItemExternalID" [disabled]="mode == 'Update'"
                 [type]="'text'" [mandatory]="mode !== 'Update'"></pep-textbox>
@@ -21,9 +23,11 @@
                 <pep-textbox [label]="'Allocation' | translate" [value]="userAllocation.MaxAllocation.toString()"
                 [type]="'int'" [mandatory]="true" (valueChange)="onNumberChange('MaxAllocation', $event)"></pep-textbox>
             </div>
+
             <div class="starts">
                 <pep-date [label]="'Starts' | translate" [value]="getDateValue(userAllocation.StartDateTime)" [mandatory]="true" (valueChange)="onDateChange('StartDateTime', $event)"></pep-date>
             </div>
+            
             <div class="ends">
                 <pep-date [label]="'Ends' | translate" [value]="getDateValue(userAllocation.EndDateTime)" [mandatory]="true" (valueChange)="onDateChange('EndDateTime', $event)"></pep-date>
             </div>

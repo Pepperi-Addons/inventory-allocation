@@ -5,7 +5,7 @@
     border: 5px;
     padding: 20px;
     grid-template-columns: 1fr 1fr;
-    grid-template-areas: "user item" "allocation warehouse" "starts ends";
+    grid-template-areas: "user warehouse" "item allocation" "starts ends";
     
     .user { grid-area: user; }
   

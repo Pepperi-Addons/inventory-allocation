@@ -366,6 +366,15 @@ export class AddonComponent implements OnInit {
     this.showUserAllocationDialog(undefined)
   }
 
+  reallocate() {
+    this.addonService.postAddonApiCall(
+      this.pluginService.pluginUUID, 
+      'inventory_allocation', 
+      'reset_allocations')
+      .toPromise()
+      .then(() => this.userAllocationList.reload())
+  }
+
   showUserAllocationDialog(userAllocation: any) {
     this.pluginService.openDialog(this.translate.instant('Add a User Allocation'), UserAllocationDialogComponent, null, {
       userAllocation: userAllocation

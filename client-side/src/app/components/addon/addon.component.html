@@ -13,6 +13,7 @@
                     </p>
                     <generic-list #userAllocationList [showSearch]="true" [inline]="true" [dataSource]="userDatasource">
                         <div right-buttons>
+                            <pep-button [value]="'Re-allocate' | translate" [sizeType]="'sm'" [styleType]="'weak'" [classNames]="'pep-spacing-element'" (buttonClick)="reallocate()"></pep-button>
                             <pep-button [value]="'Add' | translate" [iconName]="'number_plus'" [iconPosition]="'end'" [sizeType]="'sm'" [styleType]="'strong'" [classNames]="'pep-spacing-element'" (buttonClick)="add()"></pep-button>
                         </div>
                     </generic-list>

@@ -38,7 +38,8 @@ export class WarehouseLockService {
             // wait until you are the first in line
             // wait a maximum of 30
             let first = false;
-            let waitUntil = new Date(new Date().getTime() + MAXIMUM_LOCK_WAITING_TIME_IN_MS) ;
+            const startedWaiting = new Date();
+            const waitUntil = new Date(startedWaiting.getTime() + MAXIMUM_LOCK_WAITING_TIME_IN_MS) ;
 
             while (!first) {
                 const l = await adal.find({
@@ -48,14 +49,15 @@ export class WarehouseLockService {
                 });
 
                 if (l.length === 0) {
-                    throw new Error('Error locking the warehouse: The lock table returned an empty array.');
+                    // DynamoDB consistant up to 1.5 seconds
+                    if (new Date().getTime() - startedWaiting.getTime() > 1700) {
+                        throw new Error(`Error locking the warehouse: The lock table still returning an empty array after ${new Date().getTime() - startedWaiting.getTime()}ms`);
+                    }
                 }
-
-                if (l[0].Key === key) {
+                else if (l[0].Key === key) {
                     first = true;
                 }
                 else {
-                    
                     if (new Date() >= waitUntil) {
                         throw new Error(`Timeout (${MAXIMUM_LOCK_WAITING_TIME_IN_MS}ms) waiting for lock with key: ${key}.`)
                     }

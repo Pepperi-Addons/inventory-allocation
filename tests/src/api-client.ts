@@ -93,4 +93,21 @@ export class ApiClient {
             })
         })
     }
+
+    getUserAllocation() {
+        return this.addonApi.func(`user_allocations`).get();
+    }
+
+    rebaseAll(commitedOrders: string[], canceledOrders: string[], warehouses: {
+        WarehouseID: string,
+        Items: {
+            [key: string]: number
+        }
+    }[]) {
+        return this.addonApi.func('rebase_all').post({}, {
+            CommitedOrders: commitedOrders,
+            CanceledOrders: canceledOrders,
+            Warehouses: warehouses
+        })
+    }
 }

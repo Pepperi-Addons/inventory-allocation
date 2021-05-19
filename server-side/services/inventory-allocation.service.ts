@@ -26,6 +26,7 @@ export class InventoryAllocationService {
      * @param inventories the item inventories to update/rebase
      */
     async rebaseInventories(warehouseID: string, inventories: { [key: string]: number }) {
+        let res: any = undefined;
 
         // make sure that the warehouse exists, if not - create it
         await this.createWarehouseIfNeeded(warehouseID);
@@ -81,10 +82,49 @@ export class InventoryAllocationService {
             warehouse.Inventory = inventories;
             warehouse.UserAllocations = userTotals;
             await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
+            res = warehouse;
 
             const t1 = performance.now();
             console.log(`rebase inventories took ${(t1-t0).toFixed(2)}ms with ${orderAllocations.length} order allocations and ${userAllocations.length} user allocations`)
         });
+
+        return res;
+    }
+
+    async rebaseAll(commitedOrders: string[], canceledOrders: string[], warehouses: {
+        WarehouseID: string;
+        Items: { [key: string]: number }
+    }[]) {
+        // first hide all commited orders
+        await Promise.all(commitedOrders.map(order => (async () => {
+            await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
+                Key: order,
+                Hidden: true
+            })
+        })()));
+
+        // UnHide all canceled
+        await Promise.all(canceledOrders.map(order => (async () => {
+            await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
+                Key: order,
+                Hidden: false
+            })
+        })()));
+
+        // perform rebase for each warehouse
+        await Promise.all(warehouses.map(warehouse => (async () => {
+            await this.rebaseInventories(warehouse.WarehouseID, warehouse.Items);
+        })()));
+
+        // deallocate the canceled orders
+        await Promise.all(canceledOrders.map(order => (async () => {
+            const obj = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(order).get();
+            await this.allocateOrderInventory(obj.WarehouseID, obj.OrderUUID, obj.UserID, {});
+        })()));
+
+        return {
+            Success: true
+        }
     }
 
     /**
@@ -147,6 +187,9 @@ export class InventoryAllocationService {
             catch(err) {
                 // todo: make sure the error is not found the orderUUID
             }
+
+            // hide if empty order is sent
+            existing.Hidden = Object.keys(items).length === 0;
 
             // bring the warehouse inventory
             const warehouse = await this.getWarehouse(warehouseID);
@@ -402,13 +445,15 @@ export class InventoryAllocationService {
 
             // update User Allocations UDT
             const userAllocations = await this.getUserAllocations({
-                where: `ModificationDateTime > ${new Date(new Date().getTime() - 5*60*1000).getTime()}`
+                where: `ModificationDateTime > ${new Date(new Date().getTime() - 5*60*1000).getTime()}`,
+                include_deleted: true
             });
             console.log(`${userAllocations.length} user allocations have changed in the last 5 minutes`);
             if (userAllocations.length > 0) {
                 this.addonService.papiClient.userDefinedTables.batch(
                     userAllocations.map(userAllocation => {
                         return {
+                            Hidden: userAllocation.Hidden || false,
                             MapDataExternalID: USER_ALLOCATION_UDT_NAME,
                             MainKey: userAllocation.UserID,
                             SecondaryKey: [userAllocation.WarehouseID, userAllocation.ItemExternalID].join('_'),

@@ -50,7 +50,7 @@ export class WarehouseLockService {
 
                 if (l.length === 0) {
                     // DynamoDB consistant up to 1.5 seconds
-                    if (new Date().getTime() - startedWaiting.getTime() > 1700) {
+                    if (new Date().getTime() - startedWaiting.getTime() > 5000) {
                         throw new Error(`Error locking the warehouse: The lock table still returning an empty array after ${new Date().getTime() - startedWaiting.getTime()}ms`);
                     }
                 }
@@ -84,12 +84,9 @@ export class WarehouseLockService {
      */
     private async unlockWarehouse(key: string, warehouseID: string): Promise<void> {
         const table = warehouseID + WAREHOUSE_LOCK_TABLE_SUFFIX;
-        const adal = this.addonService.papiClient.addons.data.uuid(this.addonService.addonUUID).table(table);
+        const adal = this.addonService.adal.table(table);
 
-        await adal.upsert({
-            Key: key,
-            Hidden: true
-        });
+        await adal.key(key).hardDelete(true);
     }
 
     /**
@@ -129,10 +126,7 @@ export class WarehouseLockService {
         for (const lock of locks) {
             if (new Date(lock.CreationDateTime!) < new Date(new Date().getTime() - 60*1000)) {
                 console.log(`Removing lock with key: ${lock.Key}. Created: ${lock.CreationDateTime}`);
-                await this.addonService.adal.table(warehouseID + WAREHOUSE_LOCK_TABLE_SUFFIX).upsert({
-                    Key: lock.Key,
-                    Hidden: true
-                })
+                await this.unlockWarehouse(lock.Key, warehouseID);
             }
         }
     }

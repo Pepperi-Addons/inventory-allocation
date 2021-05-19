@@ -18,6 +18,26 @@ export async function rebase_inventory(client, request: Request) {
 }
 
 /**
+ * POST /inventory_allocation/rebase_all
+ * Body Params:
+ *  - CommittedOrders: string[]
+ *  - CanceledOrders: string[]
+ *  - Warehouses: {
+ *      WarehouseID: string;
+ *      Items: { [key: string]: number }
+ *  }[]
+ * ---------------------------------------------
+ * Update Inventories in a warehouse
+ * Creates the warehouse if it doesn't yet exist
+ * Sets the inventories after subtracting user & order allocations
+ * Updates the UDT inventory table
+ */
+ export async function rebase_all(client, request: Request) {
+    const service = new InventoryAllocationService(client);
+    return service.rebaseAll(request.body.CommitedOrders, request.body.CanceledOrders, request.body.Warehouses);
+}
+
+/**
  * POST /inventory_allocation/allocate_inventory
  * BodyParams
  *  - WarehouseID: string

@@ -96,53 +96,63 @@ export async function uninstall(client: Client, request: Request): Promise<any> 
         addonUUID: client.AddonUUID,
         addonSecretKey: client.AddonSecretKey
     });
-
-    const warehouses = await papiClient.addons.data.uuid(client.AddonUUID).table(WAREHOUSE_TABLE_NAME).iter({
-        fields: ['Key']
-    }).toArray();
-    
-    for (const warehouse of warehouses) {
-        await papiClient.post(`/addons/data/schemes/${warehouse.Key}${WAREHOUSE_LOCK_TABLE_SUFFIX}/purge`)
+    try {
+            
+        const warehouses = await papiClient.addons.data.uuid(client.AddonUUID).table(WAREHOUSE_TABLE_NAME).iter({
+            fields: ['Key']
+        }).toArray();
+        
+        for (const warehouse of warehouses) {
+            try {
+                await papiClient.post(`/addons/data/schemes/${warehouse.Key}${WAREHOUSE_LOCK_TABLE_SUFFIX}/purge`)
+            }
+            catch(err) {
+                console.log("Error purging lock scheme:", err);
+            }
+        }
+        
+        await papiClient.post(`/addons/data/schemes/${WAREHOUSE_TABLE_NAME}/purge`);
+        await papiClient.post(`/addons/data/schemes/${USER_ALLOCATION_TABLE_NAME}/purge`);
+        await papiClient.post(`/addons/data/schemes/${ORDER_ALLOCATION_TABLE_NAME}/purge`);
+        
+        await papiClient.metaData.userDefinedTables.upsert({
+            TableID: WAREHOUSE_INVENTORY_UDT_NAME,
+            Hidden: true,
+            MainKeyType: {
+                ID: 0,
+                Name: ''
+            },
+            SecondaryKeyType: {
+                ID: 0,
+                Name: ''
+            }
+        })
+        await papiClient.metaData.userDefinedTables.upsert({
+            TableID: USER_ALLOCATION_UDT_NAME,
+            Hidden: true,
+            MainKeyType: {
+                ID: 23,
+                Name: 'Employee'
+            },
+            SecondaryKeyType: {
+                ID: 0,
+                Name: ''
+            }
+        })
+        
+        const jobs = await papiClient.codeJobs.iter().toArray();
+        for (const job of jobs) {
+            if (job.CodeJobName === 'reset_allocations') {
+                await papiClient.codeJobs.upsert({
+                    UUID: job.UUID || '',
+                    CodeJobName: job.CodeJobName,
+                    CodeJobIsHidden: true,
+                })
+            }
+        }
     }
-    
-    await papiClient.post(`/addons/data/schemes/${WAREHOUSE_TABLE_NAME}/purge`);
-    await papiClient.post(`/addons/data/schemes/${USER_ALLOCATION_TABLE_NAME}/purge`);
-    await papiClient.post(`/addons/data/schemes/${ORDER_ALLOCATION_TABLE_NAME}/purge`);
-    
-    await papiClient.metaData.userDefinedTables.upsert({
-        TableID: WAREHOUSE_INVENTORY_UDT_NAME,
-        Hidden: true,
-        MainKeyType: {
-            ID: 0,
-            Name: ''
-        },
-        SecondaryKeyType: {
-            ID: 0,
-            Name: ''
-        }
-    })
-    await papiClient.metaData.userDefinedTables.upsert({
-        TableID: USER_ALLOCATION_UDT_NAME,
-        Hidden: true,
-        MainKeyType: {
-            ID: 23,
-            Name: 'Employee'
-        },
-        SecondaryKeyType: {
-            ID: 0,
-            Name: ''
-        }
-    })
-    
-    const jobs = await papiClient.codeJobs.iter().toArray();
-    for (const job of jobs) {
-        if (job.CodeJobName === 'reset_allocations') {
-            await papiClient.codeJobs.upsert({
-                UUID: job.UUID || '',
-                CodeJobName: job.CodeJobName,
-                CodeJobIsHidden: true,
-            })
-        }
+    catch(err) {
+        console.log("Uninstallation error", err);
     }
 
     return {success:true,resultObject:{}}

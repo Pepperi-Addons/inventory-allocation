@@ -78,6 +78,13 @@ export class InventoryAllocationService {
                 }
             }
 
+            // remove zeros
+            for (const item in inventories) {
+                if (inventories[item] === 0) {
+                    delete inventories[item];
+                }
+            }
+
             // update the warehouse
             warehouse.Inventory = inventories;
             warehouse.UserAllocations = userTotals;
@@ -112,15 +119,25 @@ export class InventoryAllocationService {
         })()));
 
         // perform rebase for each warehouse
-        await Promise.all(warehouses.map(warehouse => (async () => {
+        let results = await Promise.allSettled(warehouses.map(warehouse => (async () => {
             await this.rebaseInventories(warehouse.WarehouseID, warehouse.Items);
         })()));
 
+        let firstError = results.find(res => res.status === 'rejected');
+        if (firstError) {
+            throw firstError;
+        }
+
         // deallocate the canceled orders
-        await Promise.all(canceledOrders.map(order => (async () => {
-            const obj = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(order).get();
+        results = await Promise.allSettled(canceledOrders.map(order => (async () => {
+            const obj: OrderAllocation = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(order).get() as any;
             await this.allocateOrderInventory(obj.WarehouseID, obj.OrderUUID, obj.UserID, {});
         })()));
+        
+        firstError = results.find(res => res.status === 'rejected');
+        if (firstError) {
+            throw firstError;
+        }
 
         return {
             Success: true
@@ -292,7 +309,7 @@ export class InventoryAllocationService {
                     toSubtract = Math.max(0, toSubtract);
                 }
                 
-                warehouse.UserAllocations[item] = (warehouse.UserAllocations[item] || 0) - toSubtract;
+                warehouse.UserAllocations[item] = valueOrZero(warehouse.UserAllocations[item]) - toSubtract;
                 if (warehouse.UserAllocations[item] === 0) {
                     delete warehouse.UserAllocations[item];
                 }
@@ -310,7 +327,12 @@ export class InventoryAllocationService {
 
             if (quantity != 0) {
                 // if there still is quantities to add/subtract
-                warehouse.Inventory[item] -= quantity;
+                warehouse.Inventory[item] = valueOrZero(warehouse.Inventory[item]) - quantity;
+            }
+
+            // remove zeros
+            if (warehouse.Inventory[item] === 0) {
+                delete warehouse.Inventory[item];
             }
         }
 
@@ -328,7 +350,7 @@ export class InventoryAllocationService {
         // get all warehouses
         const warehouses = await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).iter({ fields: ['Key'] }).toArray();
 
-        await Promise.all(warehouses.map(async obj => {
+        const results = await Promise.allSettled(warehouses.map(async obj => {
             
             // make sure the lock isn't stuck
             await this.lockService.checkForStaleLocks(obj.Key);
@@ -394,7 +416,7 @@ export class InventoryAllocationService {
                     let diff = (totalUserAllocation[item] || 0) - (warehouse.UserAllocations[item] || 0);
                     
                     // only up to the amount in the inventory
-                    diff = Math.min(diff, warehouse.Inventory[item]);
+                    diff = Math.min(diff, valueOrZero(warehouse.Inventory[item]));
                     
                     if (diff) {
                         warehouseChanged = true;
@@ -407,6 +429,11 @@ export class InventoryAllocationService {
                             delete warehouse.UserAllocations[item];
                         }
                     }
+
+                    // remove zeros
+                    if (warehouse.Inventory[item] === 0) {
+                        delete warehouse.Inventory[item];
+                    }
                 }
 
                 if (warehouseChanged) {
@@ -415,14 +442,47 @@ export class InventoryAllocationService {
             });
         }));
 
+        const firstError = results.find(res => res.status === 'rejected');
+        if (firstError) {
+            throw firstError;
+        }
+
          // update the UDT if the warehouse and/or has changed in the last 5 minutes
          try {
             const warehouses = await this.getWarehouses({
-                where: `ModificationDateTime > ${new Date(new Date().getTime() - 5*60*1000).getTime()}`
+                where: `ModificationDateTime > '${new Date(new Date().getTime() - 5*60*1000).toISOString()}'`
             })
             console.log(`${warehouses.length} warehouses have changed in the last 5 minutes`);
             if (warehouses.length) {
-                this.addonService.papiClient.userDefinedTables.batch(
+                // delete removed items
+                const rows = await this.addonService.papiClient.userDefinedTables.iter({
+                    where: `MapDataExternalID = '${WAREHOUSE_INVENTORY_UDT_NAME}'`
+                }).toArray();
+                const rowsToDelete = rows.filter(
+                    row => {
+                        let res = true;
+                        const warehouse = warehouses.find(w => w.Key === row.MainKey);
+                        if (warehouse) {
+                            if (warehouse.Inventory[row.SecondaryKey] > 0) {
+                                res = false;
+                            }
+                            else if (warehouse.UserAllocations[row.SecondaryKey] > 0) {
+                                res = false;
+                            }
+                        }
+                        return res;
+                    }
+                );
+                
+                rowsToDelete.forEach(row => row.Hidden = true);
+                
+                if (rowsToDelete.length > 0) {
+                    console.log("Deleting UDT rows: ", rows);
+                    await this.addonService.papiClient.userDefinedTables.batch(rowsToDelete);
+                }
+
+                // update items
+                await this.addonService.papiClient.userDefinedTables.batch(
                     warehouses.map(
                         warehouse => Object.keys(warehouse.Inventory).map(
                             item => {
@@ -445,12 +505,12 @@ export class InventoryAllocationService {
 
             // update User Allocations UDT
             const userAllocations = await this.getUserAllocations({
-                where: `ModificationDateTime > ${new Date(new Date().getTime() - 5*60*1000).getTime()}`,
+                where: `ModificationDateTime > '${new Date(new Date().getTime() - 5*60*1000).toISOString()}'`,
                 include_deleted: true
             });
             console.log(`${userAllocations.length} user allocations have changed in the last 5 minutes`);
             if (userAllocations.length > 0) {
-                this.addonService.papiClient.userDefinedTables.batch(
+                await this.addonService.papiClient.userDefinedTables.batch(
                     userAllocations.map(userAllocation => {
                         return {
                             Hidden: userAllocation.Hidden || false,

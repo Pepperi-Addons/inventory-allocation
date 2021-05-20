@@ -11,7 +11,7 @@
     "noImplicitAny": false,
     "allowJs": true,
     "resolveJsonModule": true,
-    "lib": ["es2019"]
+    "lib": ["es2020"]
   },
   "exclude": [
     "./build/**",

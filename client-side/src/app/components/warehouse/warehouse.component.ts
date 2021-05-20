@@ -50,7 +50,12 @@ export class WarehouseComponent implements OnInit {
       return this.getWarehouse().then(warehouse => {
           const res = [];
 
-          let keys = Object.keys(warehouse.Inventory);
+          let keys = [
+            ...new Set([
+              ...Object.keys(warehouse.Inventory), 
+              ...Object.keys(warehouse.UserAllocations)
+            ])
+        ];
           
           if (state.searchString) {
             keys = keys.filter(key => key.toLowerCase().includes(state.searchString.toLowerCase()))
@@ -59,7 +64,7 @@ export class WarehouseComponent implements OnInit {
           for (const item of keys) {
             res.push({
               Item: item,
-              Quantity: warehouse.Inventory[item].toString(),
+              Quantity: (warehouse.Inventory[item] || 0).toString(),
               UserAllocations: (warehouse.UserAllocations[item] || 0).toString()
             })
           }

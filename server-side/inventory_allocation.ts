@@ -27,10 +27,14 @@ export async function rebase_inventory(client, request: Request) {
  *      Items: { [key: string]: number }
  *  }[]
  * ---------------------------------------------
- * Update Inventories in a warehouse
- * Creates the warehouse if it doesn't yet exist
- * Sets the inventories after subtracting user & order allocations
- * Updates the UDT inventory table
+ * Update Inventories in multiple warehouses
+ * Commit Orders & Cancel orders
+ * 
+ * Returns:
+ * 200
+ * {
+ *  Success: true
+ * }
  */
  export async function rebase_all(client, request: Request) {
     const service = new InventoryAllocationService(client);

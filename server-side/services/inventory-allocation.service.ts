@@ -38,6 +38,12 @@ export class InventoryAllocationService {
             // get the current warehouse object
             const warehouse = await this.getWarehouse(warehouseID);
 
+            // merge with existing inventories
+            inventories = {
+                ...warehouse.Inventory,
+                ...inventories
+            };
+
             // get all the orders
             const orderAllocations = (await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
                 where: `WarehouseID = '${warehouseID}'` // hopefully an index
@@ -636,7 +642,7 @@ export class InventoryAllocationService {
                     const userAllocation = userAllocations.find(alloc => alloc.ItemExternalID == item);
                     if (userAllocation && userAllocation.Allocated) {
                         const remaining = Math.max(0, userAllocation.MaxAllocation - userAllocation.UsedAllocation);
-                        const totalUserAllocations = warehouse.UserAllocations[item];
+                        const totalUserAllocations = valueOrZero(warehouse.UserAllocations[item]);
                         available += Math.min(remaining, totalUserAllocations);
                     }
                 }

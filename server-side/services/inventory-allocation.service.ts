@@ -422,7 +422,8 @@ export class InventoryAllocationService {
                     let diff = (totalUserAllocation[item] || 0) - (warehouse.UserAllocations[item] || 0);
                     
                     // only up to the amount in the inventory
-                    diff = Math.min(diff, valueOrZero(warehouse.Inventory[item]));
+                    // bound by 0 because warehouse.Inventory[item] can be negative
+                    diff = Math.max(0, Math.min(diff, valueOrZero(warehouse.Inventory[item])));
                     
                     if (diff) {
                         warehouseChanged = true;
@@ -460,19 +461,19 @@ export class InventoryAllocationService {
             })
             console.log(`${warehouses.length} warehouses have changed in the last 5 minutes`);
             if (warehouses.length) {
-                // delete removed items
+                // delete removed items from changed warehouses
                 const rows = await this.addonService.papiClient.userDefinedTables.iter({
-                    where: `MapDataExternalID = '${WAREHOUSE_INVENTORY_UDT_NAME}'`
+                    where: `MapDataExternalID = '${WAREHOUSE_INVENTORY_UDT_NAME}' AND MainKey IN (${warehouses.map(w => `'${w.Key}'`).join(', ')})`
                 }).toArray();
                 const rowsToDelete = rows.filter(
                     row => {
                         let res = true;
                         const warehouse = warehouses.find(w => w.Key === row.MainKey);
                         if (warehouse) {
-                            if (warehouse.Inventory[row.SecondaryKey] > 0) {
+                            if (warehouse.Inventory[row.SecondaryKey]) {
                                 res = false;
                             }
-                            else if (warehouse.UserAllocations[row.SecondaryKey] > 0) {
+                            else if (warehouse.UserAllocations[row.SecondaryKey]) {
                                 res = false;
                             }
                         }
@@ -490,7 +491,12 @@ export class InventoryAllocationService {
                 // update items
                 await this.addonService.papiClient.userDefinedTables.batch(
                     warehouses.map(
-                        warehouse => Object.keys(warehouse.Inventory).map(
+                        warehouse => [
+                            ...new Set([
+                                ...Object.keys(warehouse.Inventory),
+                                ...Object.keys(warehouse.UserAllocations)
+                            ])
+                        ].map(
                             item => {
                                 return {
                                     MapDataExternalID: WAREHOUSE_INVENTORY_UDT_NAME,

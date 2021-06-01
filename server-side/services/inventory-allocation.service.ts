@@ -423,7 +423,7 @@ export class InventoryAllocationService {
                     
                     // only up to the amount in the inventory
                     // bound by 0 because warehouse.Inventory[item] can be negative
-                    diff = Math.max(0, Math.min(diff, valueOrZero(warehouse.Inventory[item])));
+                    diff = Math.min(diff, Math.max(0, valueOrZero(warehouse.Inventory[item])));
                     
                     if (diff) {
                         warehouseChanged = true;

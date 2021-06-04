@@ -571,8 +571,8 @@ describe("BOGO tests from spreadsheet", () => {
         console.log(warehouse);
         console.log(res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
         expect(res.Success).to.be.false;
         expect(res.AllocationAvailability['1']).to.be.equal(100);
         expect(res.AllocationAvailability['2']).to.be.equal(100);
@@ -630,8 +630,8 @@ describe("BOGO tests from spreadsheet", () => {
         console.log(warehouse);
         console.log(res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
         expect(res.Success).to.be.false;
         expect(res.AllocationAvailability['1']).to.be.equal(100);
         expect(res.AllocationAvailability['2']).to.be.equal(100);
@@ -662,8 +662,8 @@ describe("BOGO tests from spreadsheet", () => {
         console.log(warehouse);
         console.log("Res - ", res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
         expect(res.Success).to.be.false;
         expect(res.AllocationAvailability['1']).to.be.equal(100);
         expect(res.AllocationAvailability['2']).to.be.equal(100);
@@ -694,8 +694,8 @@ describe("BOGO tests from spreadsheet", () => {
         console.log(warehouse);
         console.log("Res - ", res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
         expect(res.Success).to.be.false;
         expect(res.AllocationAvailability['1']).to.be.equal(100);
         expect(res.AllocationAvailability['2']).to.be.equal(100);
@@ -752,8 +752,8 @@ describe("BOGO tests from spreadsheet", () => {
         console.log(warehouse);
         console.log("Res - ", res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
         expect(res.Success).to.be.false;
         expect(res.AllocationAvailability['1']).to.be.equal(100);
         expect(res.AllocationAvailability['2']).to.be.equal(100);
@@ -784,8 +784,8 @@ describe("BOGO tests from spreadsheet", () => {
         console.log(warehouse);
         console.log("Res - ", res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
         expect(res.Success).to.be.false;
         expect(res.AllocationAvailability['1']).to.be.equal(100);
         expect(res.AllocationAvailability['2']).to.be.equal(100);

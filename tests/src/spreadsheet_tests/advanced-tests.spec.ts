@@ -506,10 +506,10 @@ describe("User-specific + BOGO/BOGA tests from spreadsheet", () => {
         console.log(warehouse);
         console.log(res);
     
-        expect(warehouse.Inventory['1']).to.be.equal(0);
-        expect(warehouse.Inventory['2']).to.be.equal(0);
-        expect(warehouse.Inventory['3']).to.be.equal(0);
-        expect(warehouse.Inventory['4']).to.be.equal(0);
+        expect(warehouse.Inventory['1']).to.be.undefined;
+        expect(warehouse.Inventory['2']).to.be.undefined;
+        expect(warehouse.Inventory['3']).to.be.undefined;
+        expect(warehouse.Inventory['4']).to.be.undefined;
         expect(warehouse.Inventory['9']).to.be.equal(600);
         expect(warehouse.Inventory['10']).to.be.equal(600);
         expect(warehouse.UserAllocations['1']).to.be.undefined;

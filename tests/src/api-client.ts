@@ -83,6 +83,10 @@ export class ApiClient {
         return this.addonApi.func('reset_allocations').post({},{});
     }
 
+    getOrderAllocations() {
+        return this.addonApi.func('order_allocations').get();
+    }
+
     commitAllocations(warehouseID: string, orders: string[]) {
         return this.addonApi.func('commit_allocations').post({}, {
             WarehouseID: warehouseID,

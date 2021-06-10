@@ -38,12 +38,6 @@ export class InventoryAllocationService {
             // get the current warehouse object
             const warehouse = await this.getWarehouse(warehouseID);
 
-            // merge with existing inventories
-            inventories = {
-                ...warehouse.Inventory,
-                ...inventories
-            };
-
             // get all the orders
             const orderAllocations = (await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).iter({
                 where: `WarehouseID = '${warehouseID}'` // hopefully an index
@@ -52,12 +46,16 @@ export class InventoryAllocationService {
             // subtract the order allocations per item
             for (const alloc of orderAllocations) {
                 for (const item in alloc.ItemAllocations) {
-                    inventories[item] = valueOrZero(inventories[item]) - valueOrZero(alloc.ItemAllocations[item]);
+                    if (inventories[item] !== undefined) {
+                        inventories[item] = valueOrZero(inventories[item]) - valueOrZero(alloc.ItemAllocations[item]);
+                    }
                 }
 
                 if (alloc.TempItemAllocations) {
                     for (const item in alloc.TempItemAllocations) {
-                        inventories[item] = valueOrZero(inventories[item]) - valueOrZero(alloc.TempItemAllocations[item]);
+                        if (inventories[item] !== undefined) {
+                            inventories[item] = valueOrZero(inventories[item]) - valueOrZero(alloc.TempItemAllocations[item]);
+                        }
                     }
                 }
             }
@@ -71,29 +69,43 @@ export class InventoryAllocationService {
 
             // subtract the user allocations
             for (const alloc of userAllocations) {
-                if (alloc.Allocated) { // double check
+                if (alloc.Allocated && inventories[alloc.ItemExternalID] !== undefined) { // double check
                     const allowed = Math.max(0, alloc.MaxAllocation - alloc.UsedAllocation);
-                    const possible = inventories[alloc.ItemExternalID] || 0;
+                    const possible = Math.max(0, valueOrZero(inventories[alloc.ItemExternalID]));
+                    const actual = Math.min(allowed, possible);
                     
-                    userTotals[alloc.ItemExternalID] = (userTotals[alloc.ItemExternalID] || 0) + Math.min(allowed, possible);
-                    inventories[alloc.ItemExternalID] = (inventories[alloc.ItemExternalID] || 0) - userTotals[alloc.ItemExternalID];
-
-                    if (userTotals[alloc.ItemExternalID] === 0) {
-                        delete userTotals[alloc.ItemExternalID];
-                    }
-                }
-            }
-
-            // remove zeros
-            for (const item in inventories) {
-                if (inventories[item] === 0) {
-                    delete inventories[item];
+                    userTotals[alloc.ItemExternalID] = valueOrZero(userTotals[alloc.ItemExternalID]) + actual;
+                    inventories[alloc.ItemExternalID] = valueOrZero(inventories[alloc.ItemExternalID]) - actual;
                 }
             }
 
             // update the warehouse
-            warehouse.Inventory = inventories;
-            warehouse.UserAllocations = userTotals;
+            warehouse.Inventory = {
+                ...warehouse.Inventory,
+                ...inventories   
+            };
+
+            // remove zeros
+            for (const item in warehouse.Inventory) {
+                if (warehouse.Inventory[item] === 0) {
+                    delete warehouse.Inventory[item];
+                }
+            }
+
+            // update user allocations
+            warehouse.UserAllocations = {
+                ...warehouse.UserAllocations,
+                ...userTotals
+            };
+
+            // remove zeros
+            for (const item in warehouse.UserAllocations) {
+                if (warehouse.UserAllocations[item] === 0) {
+                    delete warehouse.UserAllocations[item];
+                }
+            }
+
+
             await this.addonService.adal.table(WAREHOUSE_TABLE_NAME).upsert(warehouse);
             res = warehouse;
 
@@ -414,12 +426,12 @@ export class InventoryAllocationService {
 
                     if (userAllocation.Allocated) {
                         const userTotal = Math.max(0, userAllocation.MaxAllocation - userAllocation.UsedAllocation);
-                        totalUserAllocation[item] = (totalUserAllocation[item] || 0) + userTotal;
+                        totalUserAllocation[item] = valueOrZero(totalUserAllocation[item]) + userTotal;
                     }
                 }
 
-                for (const item in warehouse.Inventory) {
-                    let diff = (totalUserAllocation[item] || 0) - (warehouse.UserAllocations[item] || 0);
+                for (const item of this.getItems(warehouse)) {
+                    let diff = valueOrZero(totalUserAllocation[item]) - valueOrZero(warehouse.UserAllocations[item]);
                     
                     // only up to the amount in the inventory
                     // bound by 0 because warehouse.Inventory[item] can be negative
@@ -429,8 +441,8 @@ export class InventoryAllocationService {
                         warehouseChanged = true;
 
                         // move the diff from the inventory to the users allocation
-                        warehouse.Inventory[item] = warehouse.Inventory[item] - diff;
-                        warehouse.UserAllocations[item] = (warehouse.UserAllocations[item] || 0) + diff;
+                        warehouse.Inventory[item] = valueOrZero(warehouse.Inventory[item]) - diff;
+                        warehouse.UserAllocations[item] = valueOrZero(warehouse.UserAllocations[item]) + diff;
 
                         if (warehouse.UserAllocations[item] === 0) {
                             delete warehouse.UserAllocations[item];
@@ -491,12 +503,7 @@ export class InventoryAllocationService {
                 // update items
                 await this.addonService.papiClient.userDefinedTables.batch(
                     warehouses.map(
-                        warehouse => [
-                            ...new Set([
-                                ...Object.keys(warehouse.Inventory),
-                                ...Object.keys(warehouse.UserAllocations)
-                            ])
-                        ].map(
+                        warehouse => this.getItems(warehouse).map(
                             item => {
                                 return {
                                     MapDataExternalID: WAREHOUSE_INVENTORY_UDT_NAME,
@@ -545,6 +552,15 @@ export class InventoryAllocationService {
 
         const t1 = performance.now();
         console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses`)
+    }
+
+    private getItems(warehouse: Warehouse) {
+        return [
+            ...new Set([
+                ...Object.keys(warehouse.Inventory),
+                ...Object.keys(warehouse.UserAllocations)
+            ])
+        ];
     }
 
     async getWarehouse(warehouseID: string): Promise<Warehouse> {

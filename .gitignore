@@ -5,3 +5,4 @@ node_modules
 /publish/assets
 tests/mochawesome-report
 tests/env.json
+tests/dist

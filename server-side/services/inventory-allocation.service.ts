@@ -4,6 +4,7 @@ import { performance } from 'perf_hooks'
 import { AddonService } from './addon.service';
 import { WarehouseLockService } from './warehouse-lock.service';
 import { between, valueOrZero } from '../helpers';
+import { BatchApiResponse } from '@pepperi-addons/papi-sdk';
 
 const ORDER_TEMP_ALLOCATION_TIME_IN_MINUTES = 1;
 
@@ -116,10 +117,23 @@ export class InventoryAllocationService {
         return res;
     }
 
-    async rebaseAll(commitedOrders: string[], canceledOrders: string[], warehouses: {
+    async rebaseAll(commitedOrders: string[], canceledOrderIDs: string[], warehouses: {
         WarehouseID: string;
         Items: { [key: string]: number }
     }[]) {
+        // limitations
+        
+        // up to 100 committed orders
+        if (commitedOrders.length > 100) {
+            throw new Error("Cannot commit more than 100 orders in one call");
+        }
+
+        // up to 10 canceled orders
+        if (canceledOrderIDs.length > 10) {
+            throw new Error("Cannot cancel more than 10 orders in one call");
+        }
+
+
         // first hide all commited orders
         await Promise.all(commitedOrders.map(order => (async () => {
             await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
@@ -129,11 +143,11 @@ export class InventoryAllocationService {
         })()));
 
         // UnHide all canceled
-        await Promise.all(canceledOrders.map(order => (async () => {
-            await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
+        const canceledOrders = await Promise.all(canceledOrderIDs.map(order => (async () => {
+            return await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).upsert({
                 Key: order,
                 Hidden: false
-            })
+            }) as OrderAllocation;
         })()));
 
         // perform rebase for each warehouse
@@ -147,14 +161,13 @@ export class InventoryAllocationService {
         }
 
         // deallocate the canceled orders
-        results = await Promise.allSettled(canceledOrders.map(order => (async () => {
-            const obj: OrderAllocation = await this.addonService.adal.table(ORDER_ALLOCATION_TABLE_NAME).key(order).get() as any;
-            await this.allocateOrderInventory(obj.WarehouseID, obj.OrderUUID, obj.UserID, {});
-        })()));
-        
-        firstError = results.find(res => res.status === 'rejected');
-        if (firstError) {
-            throw firstError;
+        for (const obj of canceledOrders) {
+            if (obj.OrderUUID) {
+                await this.allocateOrderInventory(obj.WarehouseID, obj.OrderUUID, obj.UserID, {});
+            }
+            else {
+                throw new Error(`Could not find order with UUID: ${obj.Key} to cancel`);
+            }   
         }
 
         return {
@@ -497,7 +510,8 @@ export class InventoryAllocationService {
                 
                 if (rowsToDelete.length > 0) {
                     console.log("Deleting UDT rows: ", rows);
-                    await this.addonService.papiClient.userDefinedTables.batch(rowsToDelete);
+                    await this.addonService.papiClient.userDefinedTables.batch(rowsToDelete)
+                        .then(res => this.checkUDTResult(res));;
                 }
 
                 // update items
@@ -519,7 +533,7 @@ export class InventoryAllocationService {
                             }
                         )
                     ).flat()
-                );
+                ).then(res => this.checkUDTResult(res));
             }
 
             // update User Allocations UDT
@@ -543,7 +557,7 @@ export class InventoryAllocationService {
                             })]
                         }
                     })
-                )
+                ).then(res => this.checkUDTResult(res));
             }
         }
         catch(err) {
@@ -552,6 +566,14 @@ export class InventoryAllocationService {
 
         const t1 = performance.now();
         console.log(`check allocations took: ${(t1-t0).toFixed(2)} with ${warehouses.length} warehouses`)
+    }
+
+    private checkUDTResult(lines: BatchApiResponse[]) {
+        lines.forEach(line => {
+            if (line.Status === 'Error') {
+                console.error("Error updating UDT line: ", line);
+            }
+        })
     }
 
     private getItems(warehouse: Warehouse) {

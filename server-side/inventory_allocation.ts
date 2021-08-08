@@ -14,6 +14,7 @@ import { Client, Request } from '@pepperi-addons/debug-server'
  */
 export async function rebase_inventory(client, request: Request) {
     const service = new InventoryAllocationService(client);
+    console.log(`rebase request body: ${JSON.stringify(request.body)}`);
     return service.rebaseInventories(request.body.WarehouseID, request.body.Items);
 }
 
@@ -38,6 +39,7 @@ export async function rebase_inventory(client, request: Request) {
  */
  export async function rebase_all(client, request: Request) {
     const service = new InventoryAllocationService(client);
+    console.log(`rebase_all request body: ${JSON.stringify(request.body)}`);
     return service.rebaseAll(request.body.CommitedOrders, request.body.CanceledOrders, request.body.Warehouses);
 }
 

@@ -50,11 +50,13 @@ export async function install(client: Client, request: Request): Promise<any> {
         }
     });
 
+    // main key type is Catalog type so that it will support uploading more than 1000 rows
+    // in bulk upsert
     await papiClient.metaData.userDefinedTables.upsert({
         TableID: WAREHOUSE_INVENTORY_UDT_NAME,
         MainKeyType: {
-            ID: 0,
-            Name: ''
+            ID: 54,
+            Name: "Catalog Name"
         },
         SecondaryKeyType: {
             ID: 0,
@@ -119,8 +121,8 @@ export async function uninstall(client: Client, request: Request): Promise<any> 
             TableID: WAREHOUSE_INVENTORY_UDT_NAME,
             Hidden: true,
             MainKeyType: {
-                ID: 0,
-                Name: ''
+                ID: 54,
+                Name: "Catalog Name"
             },
             SecondaryKeyType: {
                 ID: 0,

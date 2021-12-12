@@ -160,18 +160,31 @@ export class InventoryAllocationService {
             throw firstError;
         }
 
+        const failedCancelations: {
+            OrderUUID: string;
+            Error: string;
+        }[] = [];
         // deallocate the canceled orders
         for (const obj of canceledOrders) {
-            if (obj.OrderUUID) {
-                await this.allocateOrderInventory(obj.WarehouseID, obj.OrderUUID, obj.UserID, {});
+            try {
+                if (obj.OrderUUID) {
+                    await this.allocateOrderInventory(obj.WarehouseID, obj.OrderUUID, obj.UserID, {});
+                }
+                else {
+                    throw new Error(`Could not find order with UUID: ${obj.Key} to cancel`);
+                }   
             }
-            else {
-                throw new Error(`Could not find order with UUID: ${obj.Key} to cancel`);
-            }   
+            catch (err) {
+                failedCancelations.push({
+                    OrderUUID: obj.Key,
+                    Error: err instanceof Error ? err.message : ''
+                });
+            }
         }
 
         return {
-            Success: true
+            Success: true,
+            FailedCancelations: failedCancelations
         }
     }
 

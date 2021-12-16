@@ -7,9 +7,9 @@ import { ApiClient } from '../api-client';
 const apiClient = new ApiClient();
 
 describe("Test case rebase_all api", () => {
-    // before(() => apiClient.install());
+    before(() => apiClient.install());
 
-    // after(() => apiClient.uninstall());
+    after(() => apiClient.uninstall());
 
     describe("Create 10 orders and then cancel all of them with rebase_all - should success, if 20 - should fail", async () => {
       const warehouseID = uuid();
@@ -62,7 +62,7 @@ describe("Test case rebase_all api", () => {
         let rebase: any = '';
         try {
           rebase = await apiClient.rebaseAll([], orders, [{
-              WarehouseID: "41",
+              WarehouseID: warehouseID,
               Items: {
                   ['1']: 4500
               }
@@ -133,7 +133,7 @@ describe("Test case rebase_all api", () => {
         let rebase = '';
         try {
           rebase = await apiClient.rebaseAll([], orders, [{
-              WarehouseID: "41",
+              WarehouseID: warehouseID,
               Items: {
                   ['1']: 4500
               }
@@ -169,9 +169,9 @@ describe("Test case rebase_all api", () => {
         });
     
 
-        it('Make 20 orders - 1', async () => {
+        it('Make 15 orders - 1 -> 15 in total', async () => {
             let ourOrders: any[] = []
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 15; i++) {
                 let order = uuid();
                 orders.push(order);
                 ourOrders.push(order)
@@ -194,12 +194,12 @@ describe("Test case rebase_all api", () => {
           const warehouse = await apiClient.getWarehouse(warehouseID);
           console.log(warehouse);
     
-          expect(warehouse.Inventory['1']).to.be.equal(4500 - 20);
+          expect(warehouse.Inventory['1']).to.be.equal(4500 - 15);
         })
 
-        it('Make 20 more orders - 2', async () => {
+        it('Make 15 more orders - 2 -> 30 in total', async () => {
             let ourOrders: any[] = []
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 15; i++) {
                 let order = uuid();
                 orders.push(order);
                 ourOrders.push(order)
@@ -222,12 +222,40 @@ describe("Test case rebase_all api", () => {
           const warehouse = await apiClient.getWarehouse(warehouseID);
           console.log(warehouse);
     
-          expect(warehouse.Inventory['1']).to.be.equal(4500 - 40);
+          expect(warehouse.Inventory['1']).to.be.equal(4500 - 30);
         })
 
-        it('Make 20 more orders - 3', async () => {
+        it('Make 15 more orders - 3 -> 45 in total', async () => {
             let ourOrders: any[] = []
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 15; i++) {
+                let order = uuid();
+                orders.push(order);
+                ourOrders.push(order)
+            }
+
+            await Promise.all(ourOrders.map(order => (async () => {
+                try {
+                  let alloc = await apiClient.allocatedOrder(warehouseID, order, userID, [
+                    {
+                      ItemExternalID: '1',
+                      UnitsQuantity: 1
+                    }
+                  ])
+                  console.log("success", alloc);
+                } catch (error) {
+                    console.log("error", error);
+                }
+              })()))
+
+          const warehouse = await apiClient.getWarehouse(warehouseID);
+          console.log(warehouse);
+    
+          expect(warehouse.Inventory['1']).to.be.equal(4500 - 45);
+        })
+
+        it('Make 15 more orders - 4 -> 60 in total', async () => {
+            let ourOrders: any[] = []
+            for (let i = 0; i < 15; i++) {
                 let order = uuid();
                 orders.push(order);
                 ourOrders.push(order)
@@ -253,37 +281,9 @@ describe("Test case rebase_all api", () => {
           expect(warehouse.Inventory['1']).to.be.equal(4500 - 60);
         })
 
-        it('Make 20 more orders - 4', async () => {
-            let ourOrders: any[] = []
-            for (let i = 0; i < 20; i++) {
-                let order = uuid();
-                orders.push(order);
-                ourOrders.push(order)
-            }
-
-            await Promise.all(ourOrders.map(order => (async () => {
-                try {
-                  let alloc = await apiClient.allocatedOrder(warehouseID, order, userID, [
-                    {
-                      ItemExternalID: '1',
-                      UnitsQuantity: 1
-                    }
-                  ])
-                  console.log("success", alloc);
-                } catch (error) {
-                    console.log("error", error);
-                }
-              })()))
-
-          const warehouse = await apiClient.getWarehouse(warehouseID);
-          console.log(warehouse);
-    
-          expect(warehouse.Inventory['1']).to.be.equal(4500 - 75);
-        })
-
-        it('Make 20 more orders - 5', async () => {
+        it('Make 15 more orders - 5 -> 75 in total', async () => {
           let ourOrders: any[] = []
-          for (let i = 0; i < 20; i++) {
+          for (let i = 0; i < 15; i++) {
               let order = uuid();
               orders.push(order);
               ourOrders.push(order)
@@ -303,18 +303,74 @@ describe("Test case rebase_all api", () => {
               }
             })()))
 
-        const warehouse = await apiClient.getWarehouse(warehouseID);
-        console.log(warehouse);
-  
-        expect(warehouse.Inventory['1']).to.be.equal(4500 - 75);
-      })
+          const warehouse = await apiClient.getWarehouse(warehouseID);
+          console.log(warehouse);
+    
+          expect(warehouse.Inventory['1']).to.be.equal(4500 - 75);
+        })
+
+        it('Make 15 more orders - 6 -> 90 in total', async () => {
+          let ourOrders: any[] = []
+          for (let i = 0; i < 15; i++) {
+              let order = uuid();
+              orders.push(order);
+              ourOrders.push(order)
+          }
+
+          await Promise.all(ourOrders.map(order => (async () => {
+              try {
+                let alloc = await apiClient.allocatedOrder(warehouseID, order, userID, [
+                  {
+                    ItemExternalID: '1',
+                    UnitsQuantity: 1
+                  }
+                ])
+                console.log("success", alloc);
+              } catch (error) {
+                  console.log("error", error);
+              }
+            })()))
+
+          const warehouse = await apiClient.getWarehouse(warehouseID);
+          console.log(warehouse);
+    
+          expect(warehouse.Inventory['1']).to.be.equal(4500 - 90);
+        })
+
+        it('Make 10 more orders - 7 -> 100 in total', async () => {
+          let ourOrders: any[] = []
+          for (let i = 0; i < 10; i++) {
+              let order = uuid();
+              orders.push(order);
+              ourOrders.push(order)
+          }
+
+          await Promise.all(ourOrders.map(order => (async () => {
+              try {
+                let alloc = await apiClient.allocatedOrder(warehouseID, order, userID, [
+                  {
+                    ItemExternalID: '1',
+                    UnitsQuantity: 1
+                  }
+                ])
+                console.log("success", alloc);
+              } catch (error) {
+                  console.log("error", error);
+              }
+            })()))
+
+          const warehouse = await apiClient.getWarehouse(warehouseID);
+          console.log(warehouse);
+    
+          expect(warehouse.Inventory['1']).to.be.equal(4500 - 100);
+        })
 
         // Success
         it('Commit all 100 orders', async () => {
             console.log(orders);
             console.log("all orders", orders.length);
             let rebase = await apiClient.rebaseAll(orders, [], [{
-                WarehouseID: "41",
+                WarehouseID: warehouseID,
                 Items: {
                     ['1']: 4500 - 100
                 }

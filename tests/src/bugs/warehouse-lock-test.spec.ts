@@ -15,11 +15,11 @@ describe("Warehouse lock", () => {
         const warehouseID = uuid();
         const user = uuid();
         const order = uuid();
-        const apiCalls = 250;
+        const apiCalls = 200;
         var successCalls = 0;
         var failedCalls = 0;
     
-        it('Rebase warehouse + Allocated Order - 250 calls - First part', async () => {
+        it('Rebase warehouse + Allocated Order - 200 calls - First part', async () => {
           for (var i = 0; i < apiCalls; i++) {
             try {
               await apiClient.rebase(warehouseID, {
@@ -36,10 +36,10 @@ describe("Warehouse lock", () => {
 
           console.log("After all calls, successCalls = ", successCalls);
 
-          expect(successCalls).to.be.equal(250);
+          expect(successCalls).to.be.equal(200);
         });
 
-        it('Rebase warehouse + Allocated Order - 250 calls - Second part', async () => {
+        it('Rebase warehouse + Allocated Order - 200 calls - Second part', async () => {
           for (var i = 0; i < apiCalls; i++) {
             try {
               await apiClient.rebase(warehouseID, {
@@ -56,10 +56,10 @@ describe("Warehouse lock", () => {
   
           console.log("After all calls, successCalls = ", successCalls);
   
-          expect(successCalls).to.be.equal(500);
+          expect(successCalls).to.be.equal(400);
         });
 
-        it('Rebase warehouse + Allocated Order - 250 calls - Third part', async () => {
+        it('Rebase warehouse + Allocated Order - 600 calls - Third part', async () => {
           for (var i = 0; i < apiCalls; i++) {
             try {
               await apiClient.rebase(warehouseID, {
@@ -76,7 +76,7 @@ describe("Warehouse lock", () => {
   
           console.log("After all calls, successCalls = ", successCalls);
   
-          expect(successCalls).to.be.equal(750);
+          expect(successCalls).to.be.equal(600);
         });
     })
 });

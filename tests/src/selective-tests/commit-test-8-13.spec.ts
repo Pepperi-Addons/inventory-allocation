@@ -7,9 +7,9 @@ import { ApiClient } from '../api-client';
 const apiClient = new ApiClient();
 
 describe("Commit orders bug", () => {
-    // before(() => apiClient.install());
+    before(() => apiClient.install());
 
-    // after(() => apiClient.uninstall());
+    after(() => apiClient.uninstall());
 
     describe("Commit Orders bug - Create allocation for 1 user, submit with one user, commit this order, inventory should be correct", async () => {
       const warehouseID = uuid();

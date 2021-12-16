@@ -7,9 +7,9 @@ import { ApiClient } from '../api-client';
 const apiClient = new ApiClient();
 
 describe("Test case 6/3/21", () => {
-    // before(() => apiClient.install());
+    before(() => apiClient.install());
 
-    // after(() => apiClient.uninstall());
+    after(() => apiClient.uninstall());
 
     describe("Allocation - Pricing Change and approve - CSR Change and Approve", async () => {
         const warehouseID = uuid();
@@ -87,8 +87,8 @@ describe("Test case 6/3/21", () => {
           console.log(warehouse);
           console.log(res);
     
-          expect(warehouse.Inventory['801-620006']).to.be.equal(1000);
-          expect(warehouse.UserAllocations['801-620006']).to.be.equal(3300);
+          expect(warehouse.Inventory['801-620006']).to.be.equal(900); 
+          expect(warehouse.UserAllocations['801-620006']).to.be.equal(3400); 
           expect(res.Success).to.be.true;
           expect(res.AllocationAvailability["801-620006"]).to.be.undefined;
         })
@@ -105,8 +105,8 @@ describe("Test case 6/3/21", () => {
           console.log(warehouse);
           console.log(res);
     
-          expect(warehouse.Inventory['801-620006']).to.be.equal(1000);
-          expect(warehouse.UserAllocations['801-620006']).to.be.equal(3200);
+          expect(warehouse.Inventory['801-620006']).to.be.equal(800);
+          expect(warehouse.UserAllocations['801-620006']).to.be.equal(3400);
           expect(res.Success).to.be.true;
           expect(res.AllocationAvailability["801-620006"]).to.be.undefined;
         });

@@ -8,172 +8,172 @@ const apiClient = new ApiClient();
 
 describe('Basic tests', function () {
 
-  before(() => apiClient.install());
+  // before(() => apiClient.install());
 
-  after(() => apiClient.uninstall());
+  // after(() => apiClient.uninstall());
 
-  describe('Warehouse rebase', () => {
-    it('Rebase Inventories should match', async () => {
-      const warehouseID = uuid();
+  // describe('Warehouse rebase', () => {
+  //   it('Rebase Inventories should match', async () => {
+  //     const warehouseID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 30,
-        '2': 50
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 30,
+  //       '2': 50
+  //     });
   
-      let warehouse = await apiClient.getWarehouse(warehouseID);
+  //     let warehouse = await apiClient.getWarehouse(warehouseID);
   
-      expect(warehouse.Inventory['1']).to.be.equal(30);
-      expect(warehouse.Inventory['2']).to.be.equal(50);
-    })
+  //     expect(warehouse.Inventory['1']).to.be.equal(30);
+  //     expect(warehouse.Inventory['2']).to.be.equal(50);
+  //   })
 
-    it('Scheduled job runs', async () => {
-      const warehouseID = uuid();
+  //   it('Scheduled job runs', async () => {
+  //     const warehouseID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 30,
-        '2': 50
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 30,
+  //       '2': 50
+  //     });
   
-      await apiClient.createUserAllocation(warehouseID, uuid(), '1', 25, yesterday(), tomorrow());
+  //     await apiClient.createUserAllocation(warehouseID, uuid(), '1', 25, yesterday(), tomorrow());
   
-      await sleepTilTheFiveMinuteMarker();
+  //     await sleepTilTheFiveMinuteMarker();
   
-      let warehouse = await apiClient.getWarehouse(warehouseID);
+  //     let warehouse = await apiClient.getWarehouse(warehouseID);
   
-      expect(warehouse.Inventory['1']).to.be.equal(5);
-      expect(warehouse.Inventory['2']).to.be.equal(50);
-      expect(warehouse.UserAllocations['1']).to.be.equal(25);
-    })
-  })
+  //     expect(warehouse.Inventory['1']).to.be.equal(5);
+  //     expect(warehouse.Inventory['2']).to.be.equal(50);
+  //     expect(warehouse.UserAllocations['1']).to.be.equal(25);
+  //   })
+  // })
 
-  describe('Inventory Allocation', () => {
+  // describe('Inventory Allocation', () => {
 
-    it('Allocation should succeed', async () => {
-      const warehouseID = uuid();
+  //   it('Allocation should succeed', async () => {
+  //     const warehouseID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 30,
-        '2': 50
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 30,
+  //       '2': 50
+  //     });
   
-      const res = await apiClient.allocatedOrder(warehouseID, uuid(), uuid(), [
-        {
-          ItemExternalID: '1',
-          UnitsQuantity: 20
-        },
-        {
-          ItemExternalID: '2',
-          UnitsQuantity: 20
-        }
-      ])
+  //     const res = await apiClient.allocatedOrder(warehouseID, uuid(), uuid(), [
+  //       {
+  //         ItemExternalID: '1',
+  //         UnitsQuantity: 20
+  //       },
+  //       {
+  //         ItemExternalID: '2',
+  //         UnitsQuantity: 20
+  //       }
+  //     ])
   
-      expect(res.Success).to.be.true;
-    })
+  //     expect(res.Success).to.be.true;
+  //   })
 
-    it('Allocation should fail', async () => {
-      const warehouseID = uuid();
+  //   it('Allocation should fail', async () => {
+  //     const warehouseID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 15,
-        '2': 20
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 15,
+  //       '2': 20
+  //     });
   
-      const res = await apiClient.allocatedOrder(warehouseID, uuid(), uuid(), [
-        {
-          ItemExternalID: '1',
-          UnitsQuantity: 20
-        },
-        {
-          ItemExternalID: '2',
-          UnitsQuantity: 20
-        }
-      ])
+  //     const res = await apiClient.allocatedOrder(warehouseID, uuid(), uuid(), [
+  //       {
+  //         ItemExternalID: '1',
+  //         UnitsQuantity: 20
+  //       },
+  //       {
+  //         ItemExternalID: '2',
+  //         UnitsQuantity: 20
+  //       }
+  //     ])
   
-      expect(res.Success).to.be.false;
-      expect(res.AllocationAvailability['1']).to.be.equal(15);
-      expect(res.AllocationAvailability['2']).to.be.undefined;
-    })
+  //     expect(res.Success).to.be.false;
+  //     expect(res.AllocationAvailability['1']).to.be.equal(15);
+  //     expect(res.AllocationAvailability['2']).to.be.undefined;
+  //   })
 
-    it('Warehouse should have less inventory', async () => {
-      const warehouseID = uuid();
+  //   it('Warehouse should have less inventory', async () => {
+  //     const warehouseID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 30,
-        '2': 50
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 30,
+  //       '2': 50
+  //     });
   
-      const res = await apiClient.allocatedOrder(warehouseID, uuid(), uuid(), [
-        {
-          ItemExternalID: '1',
-          UnitsQuantity: 20
-        },
-        {
-          ItemExternalID: '2',
-          UnitsQuantity: 20
-        }
-      ])
+  //     const res = await apiClient.allocatedOrder(warehouseID, uuid(), uuid(), [
+  //       {
+  //         ItemExternalID: '1',
+  //         UnitsQuantity: 20
+  //       },
+  //       {
+  //         ItemExternalID: '2',
+  //         UnitsQuantity: 20
+  //       }
+  //     ])
   
-      expect(res.Success).to.be.true;
+  //     expect(res.Success).to.be.true;
   
-      let warehouse = await apiClient.getWarehouse(warehouseID);
+  //     let warehouse = await apiClient.getWarehouse(warehouseID);
   
-      expect(warehouse.Inventory['1']).to.be.equal(10);
-      expect(warehouse.Inventory['2']).to.be.equal(30);
-    })
-  })
+  //     expect(warehouse.Inventory['1']).to.be.equal(10);
+  //     expect(warehouse.Inventory['2']).to.be.equal(30);
+  //   })
+  // })
 
-  describe('User Allocation', () => {
-    it('User Allocation removes from inventory', async () => {
-      const warehouseID = uuid();
+  // describe('User Allocation', () => {
+  //   it('User Allocation removes from inventory', async () => {
+  //     const warehouseID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 30,
-        '2': 50
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 30,
+  //       '2': 50
+  //     });
   
-      await apiClient.createUserAllocation(warehouseID, uuid(), '1', 25, yesterday(), tomorrow());
+  //     await apiClient.createUserAllocation(warehouseID, uuid(), '1', 25, yesterday(), tomorrow());
   
-      await apiClient.forceResetAllocations();
+  //     await apiClient.forceResetAllocations();
   
-      let warehouse = await apiClient.getWarehouse(warehouseID);
+  //     let warehouse = await apiClient.getWarehouse(warehouseID);
   
-      expect(warehouse.Inventory['1']).to.be.equal(5);
-      expect(warehouse.Inventory['2']).to.be.equal(50);
-      expect(warehouse.UserAllocations['1']).to.be.equal(25);
-    })
+  //     expect(warehouse.Inventory['1']).to.be.equal(5);
+  //     expect(warehouse.Inventory['2']).to.be.equal(50);
+  //     expect(warehouse.UserAllocations['1']).to.be.equal(25);
+  //   })
   
-    it('User Allocation goes back in inventory', async () => {
-      const warehouseID = uuid();
-      const userUUID = uuid();
+  //   it('User Allocation goes back in inventory', async () => {
+  //     const warehouseID = uuid();
+  //     const userUUID = uuid();
   
-      await apiClient.rebase(warehouseID, {
-        '1': 30,
-        '2': 50
-      });
+  //     await apiClient.rebase(warehouseID, {
+  //       '1': 30,
+  //       '2': 50
+  //     });
   
-      await apiClient.createUserAllocation(warehouseID, userUUID, '1', 25, yesterday(), tomorrow());
+  //     await apiClient.createUserAllocation(warehouseID, userUUID, '1', 25, yesterday(), tomorrow());
   
-      await apiClient.forceResetAllocations();
+  //     await apiClient.forceResetAllocations();
   
-      let warehouse = await apiClient.getWarehouse(warehouseID);
+  //     let warehouse = await apiClient.getWarehouse(warehouseID);
   
-      expect(warehouse.Inventory['1']).to.be.equal(5);
-      expect(warehouse.Inventory['2']).to.be.equal(50);
-      expect(warehouse.UserAllocations['1']).to.be.equal(25);
+  //     expect(warehouse.Inventory['1']).to.be.equal(5);
+  //     expect(warehouse.Inventory['2']).to.be.equal(50);
+  //     expect(warehouse.UserAllocations['1']).to.be.equal(25);
   
-      // update the allocation
-      await apiClient.createUserAllocation(warehouseID, userUUID, '1', 25, yesterday(), yesterday());
+  //     // update the allocation
+  //     await apiClient.createUserAllocation(warehouseID, userUUID, '1', 25, yesterday(), yesterday());
   
-      await apiClient.forceResetAllocations();
+  //     await apiClient.forceResetAllocations();
   
-      warehouse = await apiClient.getWarehouse(warehouseID);
+  //     warehouse = await apiClient.getWarehouse(warehouseID);
   
-      expect(warehouse.Inventory['1']).to.be.equal(30);
-      expect(warehouse.Inventory['2']).to.be.equal(50);
-      expect(warehouse.UserAllocations['1']).to.be.undefined;
-    })
-  })
+  //     expect(warehouse.Inventory['1']).to.be.equal(30);
+  //     expect(warehouse.Inventory['2']).to.be.equal(50);
+  //     expect(warehouse.UserAllocations['1']).to.be.undefined;
+  //   })
+  // })
 
   describe('Senario #1 - Temp allocation', () => {
 
@@ -199,6 +199,8 @@ describe('Basic tests', function () {
       ])
       allocTime = new Date();
 
+    console.log(res);
+
       expect(res.Success).to.be.false;
       expect(res.AllocationAvailability['1']).to.be.equal(15);
       expect(res.AllocationAvailability['2']).to.be.undefined;
@@ -207,8 +209,10 @@ describe('Basic tests', function () {
     it('See that the inventory was subtracted', async () => {
       const warehouse = await apiClient.getWarehouse(warehouseID);
 
-      expect(warehouse.Inventory['1']).to.be.equal(0);
-      expect(warehouse.Inventory['2']).to.be.equal(0);
+      console.log(warehouse);
+
+      expect(warehouse.Inventory['1']).to.be.undefined;
+      expect(warehouse.Inventory['2']).to.be.undefined;
     })
 
     it('Wait one minute', () => sleep(60 * 1000))
@@ -248,16 +252,23 @@ describe('Basic tests', function () {
     it('Allocate users', async () => {
       await apiClient.createUserAllocation(warehouseID, user1, '2', 15, yesterday(), tomorrow());
       await apiClient.createUserAllocation(warehouseID, user2, '2', 15, yesterday(), tomorrow());
+
+      const warehouse = await apiClient.getWarehouse(warehouseID);
+      expect(warehouse.Inventory).to.be.deep.equals({
+        '1': 15,
+        '2': 20
+      });
+      expect(warehouse.UserAllocations).to.be.empty;
     })
 
     it('Force reset allocaitons', () => apiClient.forceResetAllocations());
 
     it('Check the the warehouse', async () => {
       const warehouse = await apiClient.getWarehouse(warehouseID);
+      console.log(warehouse);
 
       expect(warehouse.Inventory).to.be.deep.equals({
         '1': 15,
-        '2': 0
       });
       expect(warehouse.UserAllocations['2']).to.be.equal(20);
     })
@@ -269,6 +280,11 @@ describe('Basic tests', function () {
           UnitsQuantity: 15
         }
       ]);
+
+      const warehouse = await apiClient.getWarehouse(warehouseID);
+      console.log(warehouse);
+
+      console.log(obj);
 
       expect(obj.Success).to.be.false;
       expect(obj.AllocationAvailability['2']).to.be.equal(0);
@@ -303,10 +319,10 @@ describe('Basic tests', function () {
 
     it('Check the the warehouse', async () => {
       const warehouse = await apiClient.getWarehouse(warehouseID);
+      console.log(warehouse);
 
       expect(warehouse.Inventory).to.be.deep.equals({
         '1': 15,
-        '2': 0
       });
       expect(warehouse.UserAllocations['2']).to.be.equal(5);
     })
@@ -345,6 +361,8 @@ describe('Basic tests', function () {
           UnitsQuantity: 15
         }
       ]);
+
+      console.log(obj);
 
       expect(obj.Success).to.be.false;
       expect(obj.AllocationAvailability['2']).to.be.equal(0);
@@ -470,7 +488,6 @@ describe('Basic tests', function () {
       const warehouse = await apiClient.getWarehouse(warehouseID);
 
       expect(warehouse.Inventory).to.be.deep.equals({
-        '1': 0,
         '2': 75,
         '3': 150,
         '4': 75
@@ -488,7 +505,6 @@ describe('Basic tests', function () {
       const warehouse = await apiClient.getWarehouse(warehouseID);
 
       expect(warehouse.Inventory).to.be.deep.equals({
-        '1': 0,
         '2': 75,
         '3': 150,
         '4': 75

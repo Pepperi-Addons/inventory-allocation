@@ -7,8 +7,8 @@ import { ApiClient } from '../api-client';
 const apiClient = new ApiClient();
 
 describe("More than 100 items in the order bug", () => {
-    // before(() => apiClient.install());
-    // after(() => apiClient.uninstall());
+    before(() => apiClient.install());
+    after(() => apiClient.uninstall());
 
     describe("Create allocation with more than 100 items, submit, check warehouse, check allocation - should be correct", async () => {
       const warehouseID = uuid();

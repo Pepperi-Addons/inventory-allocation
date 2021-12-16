@@ -114,7 +114,7 @@ describe("Package bug", () => {
           })
   
 
-        it('Second order - change qty in package in each item - add 2 qty - after check inventory qty of items should be correct', async () => {
+        it('Second order - change qty in package in each item - after check inventory qty of items should be correct', async () => {
           const res = await apiClient.allocatedOrder(warehouseID, orderID, user1, [
             {
                 ItemExternalID: '140-800003',
@@ -154,14 +154,14 @@ describe("Package bug", () => {
           console.log(warehouse);
           console.log(res);
     
-          expect(warehouse.Inventory['140-800003']).to.be.equal(4984);
-          expect(warehouse.Inventory['140-800012']).to.be.equal(4984);
-          expect(warehouse.Inventory['140-800018']).to.be.equal(4984);
-          expect(warehouse.Inventory['140-800019']).to.be.equal(4984);
-          expect(warehouse.Inventory['140-800020']).to.be.equal(4984);
-          expect(warehouse.Inventory['140-800021']).to.be.equal(4984);
-          expect(warehouse.Inventory['120-996203']).to.be.equal(4984);
-          expect(warehouse.Inventory['120-996303']).to.be.equal(4984);
+          expect(warehouse.Inventory['140-800003']).to.be.equal(4996);
+          expect(warehouse.Inventory['140-800012']).to.be.equal(4996);
+          expect(warehouse.Inventory['140-800018']).to.be.equal(4996);
+          expect(warehouse.Inventory['140-800019']).to.be.equal(4996);
+          expect(warehouse.Inventory['140-800020']).to.be.equal(4996);
+          expect(warehouse.Inventory['140-800021']).to.be.equal(4996);
+          expect(warehouse.Inventory['120-996203']).to.be.equal(4996);
+          expect(warehouse.Inventory['120-996303']).to.be.equal(4996);
           expect(res.Success).to.be.true;
           expect(res.AllocationAvailability["1"]).to.be.undefined;
         })

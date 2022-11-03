@@ -88,6 +88,14 @@ export async function install(client: Client, request: Request): Promise<any> {
         CronExpression: '0/5 * * * *' // currently runs allways (weekends, non-work hours) TBD
     })
 
+    const r = await papiClient.addons.data.relations.upsert({
+        Name: 'InventoryAllocation',
+        Type: "AddonAPI",
+        AddonUUID: client.AddonUUID,
+        RelationName: 'OpenAPISpec',
+        AddonRelativeURL: 'inventory_allocation/openapi_spec'
+    }); 
+
     return {success:true,resultObject:{}}
 }
 

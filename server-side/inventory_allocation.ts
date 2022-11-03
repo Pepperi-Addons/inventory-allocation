@@ -136,3 +136,60 @@ export async function order_allocations(client, request) {
     const service = new InventoryAllocationService(client);
     return service.getOrderAllocations(request.query);
 }
+
+export async function openapi_spec() {
+    return {
+        paths: {
+            '/inventory_allocation/rebase_inventory': {
+                post: {
+                    operationId: 'rebase_inventory',
+                    tags: ['inventory_allocation'],
+                    summary: 'Update Inventories in a warehouse',
+                    description: 'Creates the warehouse if it doesn\'t yet exist. Sets the inventories after subtracting user & order allocations. Updates the UDT inventory table',
+                    requestBody: {
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        WarehouseID: {
+                                            type: 'string',
+                                            description: 'Warehouse ID'
+                                        },
+                                        Items: {
+                                            type: 'object',
+                                            description: 'Items to update',
+                                            additionalProperties: {
+                                                type: 'number'
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses : {
+                        "200" : {
+                          "description" : "OK"
+                        }
+                      }
+                }
+            },
+            '/inventory_allocation/warehouses': {
+                get: {
+                    operationId: 'warehouses',
+                    tags: ['inventory_allocation'],
+                    summary: 'Get warehouses',
+                    description: 'Get warehouses',
+                    parameters: [
+                    ],
+                    responses : {
+                        "200" : {
+                          "description" : "OK"
+                        }
+                      }
+                }
+            },
+        }
+    }
+}
